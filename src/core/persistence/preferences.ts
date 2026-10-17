@@ -1,0 +1,64 @@
+import Store from 'electron-store';
+import { AppSettings } from '../../shared/types';
+import { DEFAULT_SETTINGS, MIN_DURATION_MS, MAX_DURATION_MS, MIN_INTERVAL, MAX_INTERVAL, MIN_DAILY_GOAL_MS, MAX_DAILY_GOAL_MS } from '../../shared/constants';
+
+export class PreferencesStore {
+  private store: Store<AppSettings>;
+
+  constructor() {
+    this.store = new Store<AppSettings>({
+      name: 'preferences',
+      defaults: DEFAULT_SETTINGS,
+    });
+  }
+
+  get<K extends keyof AppSettings>(key: K): AppSettings[K] {
+    return this.store.get(key);
+  }
+
+  set<K extends keyof AppSettings>(key: K, value: AppSettings[K]): void {
+    this.store.set(key, value);
+  }
+
+  getAll(): AppSettings {
+    return this.store.store as AppSettings;
+  }
+
+  setMany(updates: Partial<AppSettings>): void {
+    // Validate and clamp values
+    const validated = this.validate(updates);
+    for (const [key, value] of Object.entries(validated)) {
+      this.store.set(key as keyof AppSettings, value as AppSettings[keyof AppSettings]);
+    }
+  }
+
+  reset(): void {
+    this.store.clear();
+    this.store.set(DEFAULT_SETTINGS as unknown as AppSettings);
+  }
+
+  private validate(updates: Partial<AppSettings>): Partial<AppSettings> {
+    const result: Partial<AppSettings> = { ...updates };
+
+    if ('focusDurationMs' in result && typeof result.focusDurationMs === 'number') {
+      result.focusDurationMs = Math.max(MIN_DURATION_MS, Math.min(MAX_DURATION_MS, result.focusDurationMs));
+    }
+    if ('shortBreakDurationMs' in result && typeof result.shortBreakDurationMs === 'number') {
+      result.shortBreakDurationMs = Math.max(MIN_DURATION_MS, Math.min(MAX_DURATION_MS, result.shortBreakDurationMs));
+    }
+    if ('longBreakDurationMs' in result && typeof result.longBreakDurationMs === 'number') {
+      result.longBreakDurationMs = Math.max(MIN_DURATION_MS, Math.min(MAX_DURATION_MS, result.longBreakDurationMs));
+    }
+    if ('longBreakInterval' in result && typeof result.longBreakInterval === 'number') {
+      result.longBreakInterval = Math.max(MIN_INTERVAL, Math.min(MAX_INTERVAL, Math.round(result.longBreakInterval)));
+    }
+    if ('dailyGoalMs' in result && typeof result.dailyGoalMs === 'number') {
+      result.dailyGoalMs = Math.max(MIN_DAILY_GOAL_MS, Math.min(MAX_DAILY_GOAL_MS, result.dailyGoalMs));
+    }
+    if ('brownNoiseVolume' in result && typeof result.brownNoiseVolume === 'number') {
+      result.brownNoiseVolume = Math.max(0, Math.min(1, result.brownNoiseVolume));
+    }
+
+    return result;
+  }
+}

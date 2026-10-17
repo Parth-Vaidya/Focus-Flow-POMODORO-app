@@ -1,0 +1,170 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* ---- Midnight (default) ---- */
+  :root,
+  [data-theme="midnight"] {
+    --background: 240 10% 5%;
+    --foreground: 240 10% 92%;
+    --card: 240 10% 8%;
+    --card-foreground: 240 10% 92%;
+    --popover: 240 10% 9%;
+    --popover-foreground: 240 10% 92%;
+    --primary: 280 60% 65%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 8% 14%;
+    --secondary-foreground: 240 10% 80%;
+    --muted: 240 8% 12%;
+    --muted-foreground: 240 8% 55%;
+    --accent: 320 40% 60%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 65% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 8% 18%;
+    --input: 240 8% 14%;
+    --ring: 280 60% 65%;
+    --radius: 0.625rem;
+    --timer-focus: 280 60% 65%;
+    --timer-short-break: 162 60% 50%;
+    --timer-long-break: 200 80% 60%;
+  }
+
+  /* ---- Dark Burgundy ---- */
+  [data-theme="dark-burgundy"] {
+    --background: 340 20% 6%;
+    --foreground: 340 10% 90%;
+    --card: 340 20% 10%;
+    --card-foreground: 340 10% 90%;
+    --popover: 340 20% 11%;
+    --popover-foreground: 340 10% 90%;
+    --primary: 345 70% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 340 15% 16%;
+    --secondary-foreground: 340 10% 75%;
+    --muted: 340 15% 13%;
+    --muted-foreground: 340 10% 50%;
+    --accent: 360 60% 65%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 65% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 340 15% 20%;
+    --input: 340 15% 16%;
+    --ring: 345 70% 55%;
+    --radius: 0.625rem;
+    --timer-focus: 345 70% 55%;
+    --timer-short-break: 162 60% 50%;
+    --timer-long-break: 200 80% 60%;
+  }
+
+  /* ---- Muted Plum ---- */
+  [data-theme="muted-plum"] {
+    --background: 270 15% 8%;
+    --foreground: 270 10% 90%;
+    --card: 270 15% 12%;
+    --card-foreground: 270 10% 90%;
+    --popover: 270 15% 13%;
+    --popover-foreground: 270 10% 90%;
+    --primary: 290 50% 65%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 270 12% 18%;
+    --secondary-foreground: 270 10% 75%;
+    --muted: 270 12% 14%;
+    --muted-foreground: 270 8% 52%;
+    --accent: 320 45% 65%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 65% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 270 10% 22%;
+    --input: 270 12% 18%;
+    --ring: 290 50% 65%;
+    --radius: 0.625rem;
+    --timer-focus: 290 50% 65%;
+    --timer-short-break: 162 60% 50%;
+    --timer-long-break: 200 80% 60%;
+  }
+
+  /* ---- Warm Sand ---- */
+  [data-theme="warm-sand"] {
+    --background: 35 30% 92%;
+    --foreground: 35 20% 15%;
+    --card: 35 25% 95%;
+    --card-foreground: 35 20% 15%;
+    --popover: 35 25% 95%;
+    --popover-foreground: 35 20% 15%;
+    --primary: 25 70% 40%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 35 20% 85%;
+    --secondary-foreground: 35 20% 20%;
+    --muted: 35 20% 87%;
+    --muted-foreground: 35 15% 45%;
+    --accent: 15 65% 45%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 65% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 35 15% 80%;
+    --input: 35 20% 85%;
+    --ring: 25 70% 40%;
+    --radius: 0.625rem;
+    --timer-focus: 25 70% 40%;
+    --timer-short-break: 162 50% 40%;
+    --timer-long-break: 200 70% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
+  }
+
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* Timer ring animation */
+.timer-ring-progress {
+  transition: stroke-dashoffset 0.25s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timer-ring-progress {
+    transition: none;
+  }
+}
+
+/* Widget drag region */
+.drag-region {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
