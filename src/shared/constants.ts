@@ -7,16 +7,28 @@ export const DEFAULT_SETTINGS = {
   longBreakInterval: 4,
   dailyGoalMs: 120 * 60 * 1000,
   timerStyle: 'digital' as const,
-  theme: 'midnight' as const,
-  showBrownNoise: true,
-  brownNoiseVolume: 0.4,
+  theme: 'midnight',
+  // Audio defaults
+  audioEnabled: false,
+  audioVolume: 0.5,
+  audioMode: 'sequential' as const,
+  audioTrackId: null as string | null,
+  playAudioDuringBreaks: false,
+  // Notifications & alerts
   notificationsEnabled: true,
   alertSoundEnabled: true,
+  // Widget defaults
   widgetVisible: true,
   widgetPosition: null,
   widgetAlwaysOnTop: true,
-  autoStartBreaks: true,
-  autoStartFocus: true,
+  widgetDockEdge: 'right' as const,
+  // History defaults
+  historyItemsPerPage: 25,
+  // Legacy compatibility
+  showBrownNoise: false,
+  brownNoiseVolume: 0.4,
+  autoStartBreaks: false,
+  autoStartFocus: false,
 };
 
 export const RECOVERY_SAVE_INTERVAL_MS = 10_000; // save recovery every 10s

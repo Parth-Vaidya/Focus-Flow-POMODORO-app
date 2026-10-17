@@ -55,9 +55,9 @@ export class TimerEngine {
 
   // ── Public controls ────────────────────────────────────────────────────────
 
-  start(taskName: string): void {
+  start(taskName: string = '', type: SessionType = 'focus'): void {
     this.stopTick();
-    const duration = this.settings.focusDurationMs;
+    const duration = this.getDurationForType(type);
     const now = Date.now();
     const sessionId = uuidv4();
 
@@ -69,7 +69,7 @@ export class TimerEngine {
 
     this.state = {
       ...this.state,
-      sessionType: 'focus',
+      sessionType: type,
       status: 'running',
       remainingMs: duration,
       totalDurationMs: duration,
@@ -133,9 +133,19 @@ export class TimerEngine {
     this.stopTick();
     this.stopRecoverySave();
 
-    // Don't count an unfinished focus session — transition to next stage
-    const nextType = this.getNextSessionType(/* completing= */ false);
-    this.beginSession(nextType, this.state.taskName);
+    // Do not count an unfinished focus session — reset to idle on Home
+    this.state = {
+      ...IDLE_STATE,
+      sessionType: 'focus',
+      status: 'idle',
+      remainingMs: this.settings.focusDurationMs,
+      totalDurationMs: this.settings.focusDurationMs,
+      taskName: '',
+      cycleCount: this.state.cycleCount,
+      completedTodayCount: this.state.completedTodayCount,
+      activeFocusMsToday: this.state.activeFocusMsToday,
+    };
+    this.emit();
   }
 
   restart(): void {
@@ -311,22 +321,22 @@ export class TimerEngine {
       newActiveFocusMsToday = this.state.activeFocusMsToday + this.state.totalDurationMs;
     }
 
-    // Notify persistence/notification layer
+    // Notify persistence/notification layer exactly once
     this.callbacks.onSessionComplete(record);
 
-    // Determine next session type
-    const nextType = this.getNextSessionType(/* completing= */ true);
-
-    // Update state before beginning next session
+    // STOP the automatic cycle and return the main UI to Home
     this.state = {
-      ...this.state,
+      ...IDLE_STATE,
+      sessionType: 'focus',
+      status: 'idle',
+      remainingMs: this.settings.focusDurationMs,
+      totalDurationMs: this.settings.focusDurationMs,
+      taskName: '',
       cycleCount: newCycleCount,
       completedTodayCount: newCompletedToday,
       activeFocusMsToday: newActiveFocusMsToday,
     };
-
-    // Auto-start next session
-    this.beginSession(nextType, this.state.taskName);
+    this.emit();
   }
 
   private getNextSessionType(completing: boolean): SessionType {

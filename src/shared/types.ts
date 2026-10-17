@@ -6,7 +6,52 @@ export type SessionStatus = 'idle' | 'running' | 'paused' | 'completed' | 'skipp
 
 export type TimerStyle = 'digital' | 'circular';
 
-export type Theme = 'midnight' | 'dark-burgundy' | 'muted-plum' | 'warm-sand';
+export type BuiltInTheme = 'midnight' | 'dark-burgundy' | 'muted-plum' | 'warm-sand';
+export type Theme = BuiltInTheme | string;
+
+export interface ThemeColors {
+  background: string;
+  foreground: string;
+  card: string;
+  cardForeground: string;
+  popover: string;
+  popoverForeground: string;
+  primary: string;
+  primaryForeground: string;
+  secondary: string;
+  secondaryForeground: string;
+  muted: string;
+  mutedForeground: string;
+  accent: string;
+  accentForeground: string;
+  destructive: string;
+  destructiveForeground: string;
+  border: string;
+  input: string;
+  ring: string;
+  timerFocus: string;
+  timerShortBreak: string;
+  timerLongBreak: string;
+}
+
+export interface ThemeDefinition {
+  id: string;
+  name: string;
+  version?: string;
+  author?: string;
+  isCustom: boolean;
+  colors: ThemeColors;
+}
+
+export type AudioPlaybackMode = 'single' | 'sequential' | 'shuffle';
+
+export interface AudioTrack {
+  id: string;
+  name: string;
+  fileName: string;
+  path: string;
+  sizeBytes: number;
+}
 
 export interface TimerState {
   sessionType: SessionType;
@@ -14,7 +59,7 @@ export interface TimerState {
   remainingMs: number;
   totalDurationMs: number;
   taskName: string;
-  /** How many focus sessions completed in current cycle (0-3) */
+  /** How many focus sessions completed in current cycle (0 to interval-1) */
   cycleCount: number;
   /** Total completed focus sessions today */
   completedTodayCount: number;
@@ -52,16 +97,28 @@ export interface AppSettings {
   longBreakInterval: number; // completed focus sessions before long break
   dailyGoalMs: number;
   timerStyle: TimerStyle;
-  theme: Theme;
-  showBrownNoise: boolean;
-  brownNoiseVolume: number; // 0-1
+  theme: string;
+  // Local audio settings
+  audioEnabled: boolean;
+  audioVolume: number; // 0-1
+  audioMode: AudioPlaybackMode;
+  audioTrackId: string | null;
+  playAudioDuringBreaks: boolean;
+  // Notifications & alerts
   notificationsEnabled: boolean;
   alertSoundEnabled: boolean;
+  // Floating widget
   widgetVisible: boolean;
   widgetPosition: WidgetPosition | null;
   widgetAlwaysOnTop: boolean;
-  autoStartBreaks: boolean;
-  autoStartFocus: boolean;
+  widgetDockEdge: 'left' | 'right' | 'top' | 'bottom';
+  // History preferences
+  historyItemsPerPage: number;
+  // Backward compatibility legacy fields
+  showBrownNoise?: boolean;
+  brownNoiseVolume?: number;
+  autoStartBreaks?: boolean;
+  autoStartFocus?: boolean;
 }
 
 export interface WidgetPosition {
@@ -114,7 +171,15 @@ export const IPC = {
   MAIN_FOCUS: 'main:focus',
   NAVIGATE: 'navigate',
 
-  // Brown noise
+  // Themes
+  THEMES_GET_ALL: 'themes:get-all',
+  THEMES_OPEN_FOLDER: 'themes:open-folder',
+  THEMES_REFRESH: 'themes:refresh',
+
+  // Local audio
+  AUDIO_GET_LIBRARY: 'audio:get-library',
+  AUDIO_OPEN_FOLDER: 'audio:open-folder',
+  AUDIO_REFRESH_LIBRARY: 'audio:refresh-library',
   AUDIO_BROWN_NOISE_START: 'audio:brown-noise-start',
   AUDIO_BROWN_NOISE_STOP: 'audio:brown-noise-stop',
   AUDIO_BROWN_NOISE_VOLUME: 'audio:brown-noise-volume',
@@ -125,6 +190,7 @@ export const IPC = {
 
   // Recovery
   RECOVERY_GET: 'recovery:get',
+  RECOVERY_RESUME: 'recovery:resume',
   RECOVERY_DISMISS: 'recovery:dismiss',
 
   // App

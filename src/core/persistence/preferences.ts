@@ -58,6 +58,22 @@ export class PreferencesStore {
     if ('brownNoiseVolume' in result && typeof result.brownNoiseVolume === 'number') {
       result.brownNoiseVolume = Math.max(0, Math.min(1, result.brownNoiseVolume));
     }
+    if ('audioVolume' in result && typeof result.audioVolume === 'number') {
+      result.audioVolume = Math.max(0, Math.min(1, result.audioVolume));
+    }
+    if ('audioMode' in result && typeof result.audioMode === 'string') {
+      if (!['single', 'sequential', 'shuffle'].includes(result.audioMode)) {
+        result.audioMode = 'sequential';
+      }
+    }
+    if ('widgetDockEdge' in result && typeof result.widgetDockEdge === 'string') {
+      if (!['left', 'right', 'top', 'bottom'].includes(result.widgetDockEdge)) {
+        result.widgetDockEdge = 'right';
+      }
+    }
+    if ('historyItemsPerPage' in result && typeof result.historyItemsPerPage === 'number') {
+      result.historyItemsPerPage = Math.max(5, Math.min(100, Math.round(result.historyItemsPerPage)));
+    }
 
     return result;
   }
