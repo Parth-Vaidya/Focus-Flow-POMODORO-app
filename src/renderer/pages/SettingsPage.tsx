@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSettingsStore } from '../stores/settingsStore';
+import { useThemeStore } from '../stores/themeStore';
 import { Switch } from '../components/ui/switch';
 import { Label } from '../components/ui/label';
 import { Slider } from '../components/ui/slider';
@@ -8,6 +9,8 @@ import { Separator } from '../components/ui/separator';
 import { Button } from '../components/ui/button';
 import { Theme, TimerStyle } from '../../shared/types';
 import { toast } from '../components/ui/toaster';
+import { FolderOpen, RefreshCw } from 'lucide-react';
+import { cn } from '../lib/utils';
 
 const MS_PER_MIN = 60_000;
 
@@ -59,11 +62,11 @@ function DurationSlider({ label, value, min, max, step = 1, onChange }: {
   );
 }
 
-const THEMES: { value: Theme; label: string }[] = [
-  { value: 'midnight', label: 'Midnight' },
-  { value: 'dark-burgundy', label: 'Dark Burgundy' },
-  { value: 'muted-plum', label: 'Muted Plum' },
-  { value: 'warm-sand', label: 'Warm Sand' },
+const BUILT_IN_THEMES_FALLBACK = [
+  { id: 'midnight', name: 'Midnight' },
+  { id: 'dark-burgundy', name: 'Dark Burgundy' },
+  { id: 'muted-plum', name: 'Muted Plum' },
+  { id: 'warm-sand', name: 'Warm Sand' },
 ];
 
 const TIMER_STYLES: { value: TimerStyle; label: string }[] = [
@@ -73,8 +76,38 @@ const TIMER_STYLES: { value: TimerStyle; label: string }[] = [
 
 export default function SettingsPage() {
   const { settings, update, reset } = useSettingsStore();
+  const { themes, load: loadThemes, refresh: refreshThemes, openFolder: openThemesFolder } = useThemeStore();
   const [confirmClear, setConfirmClear] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [refreshingThemes, setRefreshingThemes] = useState(false);
+
+  useEffect(() => {
+    loadThemes();
+  }, [loadThemes]);
+
+  const handleOpenThemesFolder = async () => {
+    try {
+      const res = await openThemesFolder();
+      if (res && !res.ok) {
+        toast(res.error || 'Failed to open themes folder', 'error');
+      }
+    } catch {
+      toast('Failed to open themes folder', 'error');
+    }
+  };
+
+  const handleRefreshThemes = async () => {
+    setRefreshingThemes(true);
+    try {
+      const res = await refreshThemes();
+      const count = res?.custom?.length ?? 0;
+      toast(`Themes refreshed (${count} custom theme${count === 1 ? '' : 's'} found)`, 'success');
+    } catch {
+      toast('Failed to refresh themes', 'error');
+    } finally {
+      setRefreshingThemes(false);
+    }
+  };
 
   const handleClearHistory = async () => {
     if (!confirmClear) { setConfirmClear(true); return; }
@@ -94,6 +127,11 @@ export default function SettingsPage() {
     toast('Settings reset to defaults', 'info');
     setConfirmReset(false);
   };
+
+  const builtInList = themes.builtIn.length > 0 ? themes.builtIn : BUILT_IN_THEMES_FALLBACK;
+  const isCustomTheme = themes.custom.some(t => t.id === settings.theme);
+  const isBuiltInTheme = builtInList.some(t => t.id === settings.theme);
+  const isUnknownTheme = !isCustomTheme && !isBuiltInTheme;
 
   return (
     <div className="p-8 max-w-2xl">
@@ -152,14 +190,94 @@ export default function SettingsPage() {
         <div className="bg-card rounded-xl border border-border px-4">
           <SettingRow label="Color Theme" description="Choose a calm palette for the app and widget">
             <Select value={settings.theme} onValueChange={v => update({ theme: v as Theme })}>
-              <SelectTrigger className="w-44">
+              <SelectTrigger className="w-52">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {THEMES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Built-in Themes
+                </div>
+                {builtInList.map(t => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+
+                {themes.custom.length > 0 && (
+                  <>
+                    <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground border-t border-border mt-1 pt-1">
+                      Custom Themes
+                    </div>
+                    {themes.custom.map(t => (
+                      <SelectItem key={t.id} value={t.id}>
+                        <div className="flex items-center justify-between w-full gap-2">
+                          <span>{t.name}</span>
+                          {t.author && <span className="text-[10px] text-muted-foreground/80">({t.author})</span>}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </>
+                )}
+
+                {isUnknownTheme && (
+                  <>
+                    <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-destructive border-t border-border mt-1 pt-1">
+                      Unavailable
+                    </div>
+                    <SelectItem value={settings.theme}>
+                      {settings.theme} (Unavailable)
+                    </SelectItem>
+                  </>
+                )}
               </SelectContent>
             </Select>
           </SettingRow>
+          <Separator />
+          <SettingRow
+            label="Custom Themes"
+            description="Create or edit .json theme files in your local themes folder"
+          >
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleOpenThemesFolder}
+                className="flex items-center gap-1.5"
+              >
+                <FolderOpen className="w-3.5 h-3.5" />
+                <span>Open Themes Folder</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefreshThemes}
+                disabled={refreshingThemes}
+                className="flex items-center gap-1.5"
+              >
+                <RefreshCw className={cn("w-3.5 h-3.5", refreshingThemes && "animate-spin")} />
+                <span>Refresh Themes</span>
+              </Button>
+            </div>
+          </SettingRow>
+
+          {themes.custom.length === 0 ? (
+            <div className="mx-0 my-2 p-3 rounded-lg bg-muted/40 border border-border/60 text-xs text-muted-foreground">
+              <p className="font-medium text-foreground/90 mb-1">No custom themes found</p>
+              <p>
+                Add custom <code>.json</code> theme files into your themes directory to see them here. Click <strong>Open Themes Folder</strong> to view the folder and the <code>example-theme.json</code> template, then click <strong>Refresh Themes</strong>.
+              </p>
+            </div>
+          ) : (
+            <div className="mx-0 my-2 px-3 py-2 rounded-lg bg-muted/20 border border-border/40 text-xs text-muted-foreground flex items-center justify-between">
+              <span>
+                {themes.custom.length} custom theme{themes.custom.length > 1 ? 's' : ''} loaded from folder
+              </span>
+              <span className="text-[11px] text-muted-foreground/70">
+                JSON format
+              </span>
+            </div>
+          )}
+
           <Separator />
           <SettingRow label="Timer Display Style" description="Toggle between clean digital text or a circular progress ring">
             <Select value={settings.timerStyle} onValueChange={v => update({ timerStyle: v as TimerStyle })}>

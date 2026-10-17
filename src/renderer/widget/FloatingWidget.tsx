@@ -33,6 +33,9 @@ export default function FloatingWidget() {
   useEffect(() => {
     loadSettings();
 
+    const onFocus = () => loadSettings();
+    window.addEventListener('focus', onFocus);
+
     // Initial timer state
     window.focusFlow?.timer?.getState().then((stateJson: string) => {
       try {
@@ -49,6 +52,7 @@ export default function FloatingWidget() {
 
     window.focusFlow?.timer?.onStateUpdate(onUpdate);
     return () => {
+      window.removeEventListener('focus', onFocus);
       window.focusFlow?.timer?.offStateUpdate(onUpdate);
     };
   }, [loadSettings]);

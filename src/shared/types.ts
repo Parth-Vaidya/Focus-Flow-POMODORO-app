@@ -151,6 +151,7 @@ export const IPC = {
   SETTINGS_GET: 'settings:get',
   SETTINGS_SET: 'settings:set',
   SETTINGS_RESET: 'settings:reset',
+  SETTINGS_UPDATE: 'settings:update',
 
   // Session history
   HISTORY_GET: 'history:get',
@@ -175,6 +176,7 @@ export const IPC = {
   THEMES_GET_ALL: 'themes:get-all',
   THEMES_OPEN_FOLDER: 'themes:open-folder',
   THEMES_REFRESH: 'themes:refresh',
+  THEMES_UPDATE: 'themes:update',
 
   // Local audio
   AUDIO_GET_LIBRARY: 'audio:get-library',

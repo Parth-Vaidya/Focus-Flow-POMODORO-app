@@ -1,9 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { IPC, AppSettings, WidgetPosition, SessionRecord } from '../shared/types';
+import { IPC, AppSettings, WidgetPosition, SessionRecord, ThemeDefinition } from '../shared/types';
 
 // Type for the timer state update listener
 type TimerStateListener = (stateJson: string) => void;
 type NavigateListener = (route: string) => void;
+
+const timerListeners = new Map<TimerStateListener, (event: Electron.IpcRendererEvent, data: string) => void>();
 
 // Narrow, typed API exposed to the renderer
 const focusFlowAPI = {
@@ -17,10 +19,16 @@ const focusFlowAPI = {
     stop: () => ipcRenderer.invoke(IPC.TIMER_STOP),
     getState: () => ipcRenderer.invoke(IPC.TIMER_STATE_GET),
     onStateUpdate: (cb: TimerStateListener) => {
-      ipcRenderer.on(IPC.TIMER_STATE_UPDATE, (_event, data) => cb(data));
+      const listener = (_event: Electron.IpcRendererEvent, data: string) => cb(data);
+      timerListeners.set(cb, listener);
+      ipcRenderer.on(IPC.TIMER_STATE_UPDATE, listener);
     },
     offStateUpdate: (cb: TimerStateListener) => {
-      ipcRenderer.removeListener(IPC.TIMER_STATE_UPDATE, (_event, data) => cb(data));
+      const listener = timerListeners.get(cb);
+      if (listener) {
+        ipcRenderer.removeListener(IPC.TIMER_STATE_UPDATE, listener);
+        timerListeners.delete(cb);
+      }
     },
   },
 
@@ -29,6 +37,13 @@ const focusFlowAPI = {
     get: (): Promise<AppSettings> => ipcRenderer.invoke(IPC.SETTINGS_GET),
     set: (updates: Partial<AppSettings>) => ipcRenderer.invoke(IPC.SETTINGS_SET, updates),
     reset: () => ipcRenderer.invoke(IPC.SETTINGS_RESET),
+    onUpdate: (cb: (settings: AppSettings) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: AppSettings) => cb(data);
+      ipcRenderer.on(IPC.SETTINGS_UPDATE, listener);
+      return () => {
+        ipcRenderer.removeListener(IPC.SETTINGS_UPDATE, listener);
+      };
+    },
   },
 
   // Session history
@@ -64,9 +79,27 @@ const focusFlowAPI = {
     playAlert: () => ipcRenderer.invoke(IPC.AUDIO_ALERT),
   },
 
+  // Themes
+  themes: {
+    getAll: (): Promise<{ builtIn: ThemeDefinition[]; custom: ThemeDefinition[] }> =>
+      ipcRenderer.invoke(IPC.THEMES_GET_ALL),
+    openFolder: (): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC.THEMES_OPEN_FOLDER),
+    refresh: (): Promise<{ builtIn: ThemeDefinition[]; custom: ThemeDefinition[] }> =>
+      ipcRenderer.invoke(IPC.THEMES_REFRESH),
+    onUpdate: (cb: (themes: { builtIn: ThemeDefinition[]; custom: ThemeDefinition[] }) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { builtIn: ThemeDefinition[]; custom: ThemeDefinition[] }) => cb(data);
+      ipcRenderer.on(IPC.THEMES_UPDATE, listener);
+      return () => {
+        ipcRenderer.removeListener(IPC.THEMES_UPDATE, listener);
+      };
+    },
+  },
+
   // Recovery
   recovery: {
     get: () => ipcRenderer.invoke(IPC.RECOVERY_GET),
+    resume: () => ipcRenderer.invoke(IPC.RECOVERY_RESUME),
     dismiss: () => ipcRenderer.invoke(IPC.RECOVERY_DISMISS),
   },
 

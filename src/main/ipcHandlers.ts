@@ -8,6 +8,7 @@ import { Database } from '../core/persistence/db';
 import { PreferencesStore } from '../core/persistence/preferences';
 import { RecoveryStore } from '../core/persistence/recovery';
 import { AudioManager } from '../core/audio/audioManager';
+import { ThemeService, BUILT_IN_THEMES } from '../core/theme/themeService';
 import { AppSettings, WidgetPosition } from '../shared/types';
 import { APP_VERSION } from '../shared/constants';
 
@@ -18,11 +19,12 @@ interface SetupArgs {
   prefs: PreferencesStore;
   recovery: RecoveryStore;
   audioManager: AudioManager;
+  themeService: ThemeService;
   ipcMain: IpcMain;
 }
 
 export function setupIpcHandlers({
-  timerEngine, windowManager, db, prefs, recovery, audioManager, ipcMain
+  timerEngine, windowManager, db, prefs, recovery, audioManager, themeService, ipcMain
 }: SetupArgs): void {
 
   // ── Timer controls ──────────────────────────────────────────────────────────
@@ -69,19 +71,23 @@ export function setupIpcHandlers({
   ipcMain.handle(IPC.SETTINGS_SET, (_e, updates: Partial<AppSettings>) => {
     if (!updates || typeof updates !== 'object') return { ok: false };
     prefs.setMany(updates);
+    const all = prefs.getAll();
     // Propagate settings changes to timer engine
-    timerEngine.updateSettings(prefs.getAll());
+    timerEngine.updateSettings(all);
     // Handle widget-specific settings
     if ('widgetAlwaysOnTop' in updates) {
       windowManager.setWidgetAlwaysOnTop(updates.widgetAlwaysOnTop!);
     }
+    windowManager.broadcastSettings(all);
     return { ok: true };
   });
 
   ipcMain.handle(IPC.SETTINGS_RESET, () => {
     prefs.reset();
-    timerEngine.updateSettings(prefs.getAll());
-    return prefs.getAll();
+    const all = prefs.getAll();
+    timerEngine.updateSettings(all);
+    windowManager.broadcastSettings(all);
+    return all;
   });
 
   // ── History ──────────────────────────────────────────────────────────────────
@@ -202,6 +208,50 @@ export function setupIpcHandlers({
   ipcMain.handle(IPC.RECOVERY_DISMISS, () => {
     recovery.clear();
     return { ok: true };
+  });
+
+  ipcMain.handle(IPC.RECOVERY_RESUME, () => {
+    const saved = recovery.load();
+    if (!saved || !saved.timerState) {
+      return { ok: false };
+    }
+    // Restore into the engine (engine sets status → 'paused')
+    timerEngine.restoreFromRecovery(saved);
+    // Clear immediately so a second call is a no-op
+    recovery.clear();
+    // Return the restored state so the renderer can sync without a round-trip
+    return { ok: true, state: JSON.stringify(timerEngine.getState()) };
+  });
+
+  // ── Themes ───────────────────────────────────────────────────────────────────
+  ipcMain.handle(IPC.THEMES_GET_ALL, () => {
+    try {
+      return themeService.getAllThemes();
+    } catch (err) {
+      console.error('Failed to get themes:', err);
+      return { builtIn: BUILT_IN_THEMES, custom: [] };
+    }
+  });
+
+  ipcMain.handle(IPC.THEMES_OPEN_FOLDER, () => {
+    try {
+      themeService.openThemesFolder();
+      return { ok: true };
+    } catch (err) {
+      console.error('Failed to open themes folder:', err);
+      return { ok: false, error: String(err) };
+    }
+  });
+
+  ipcMain.handle(IPC.THEMES_REFRESH, () => {
+    try {
+      const themes = themeService.getAllThemes();
+      windowManager.broadcastThemes(themes);
+      return themes;
+    } catch (err) {
+      console.error('Failed to refresh themes:', err);
+      return { builtIn: BUILT_IN_THEMES, custom: [] };
+    }
   });
 
   // ── App ───────────────────────────────────────────────────────────────────────

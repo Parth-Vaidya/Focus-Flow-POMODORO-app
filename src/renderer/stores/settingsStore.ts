@@ -10,11 +10,19 @@ interface SettingsStoreState {
   reset: () => Promise<void>;
 }
 
+let settingsListenerRegistered = false;
+
 export const useSettingsStore = create<SettingsStoreState>()((set, get) => ({
   settings: DEFAULT_SETTINGS,
   loading: true,
 
   load: async () => {
+    if (!settingsListenerRegistered && window.focusFlow?.settings?.onUpdate) {
+      settingsListenerRegistered = true;
+      window.focusFlow.settings.onUpdate((newSettings) => {
+        set({ settings: newSettings });
+      });
+    }
     try {
       const settings = await window.focusFlow.settings.get();
       set({ settings, loading: false });

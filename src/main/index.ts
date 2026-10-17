@@ -7,6 +7,7 @@ import { Database } from '../core/persistence/db';
 import { PreferencesStore } from '../core/persistence/preferences';
 import { RecoveryStore } from '../core/persistence/recovery';
 import { AudioManager } from '../core/audio/audioManager';
+import { ThemeService } from '../core/theme/themeService';
 import { APP_VERSION } from '../shared/constants';
 
 // Prevent multiple instances
@@ -22,6 +23,7 @@ let db: Database;
 let prefs: PreferencesStore;
 let recovery: RecoveryStore;
 let audioManager: AudioManager;
+let themeService: ThemeService;
 
 app.whenReady().then(async () => {
   // Initialize stores
@@ -30,6 +32,7 @@ app.whenReady().then(async () => {
   await db.init();
   recovery = new RecoveryStore();
   audioManager = new AudioManager();
+  themeService = new ThemeService();
 
   const settings = prefs.getAll();
 
@@ -68,7 +71,7 @@ app.whenReady().then(async () => {
   windowManager = new WindowManager({ timerEngine, prefs });
 
   // IPC handlers: must be registered before creating windows so renderer initial calls succeed
-  setupIpcHandlers({ timerEngine, windowManager, db, prefs, recovery, audioManager, ipcMain });
+  setupIpcHandlers({ timerEngine, windowManager, db, prefs, recovery, audioManager, themeService, ipcMain });
 
   await windowManager.createMainWindow();
 

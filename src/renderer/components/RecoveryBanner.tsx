@@ -7,9 +7,15 @@ import { cn } from '../lib/utils';
 export default function RecoveryBanner() {
   const hasRecovery = useTimerStore(s => s.hasRecovery);
   const dismiss = useTimerStore(s => s.dismissRecovery);
+  const resumeRecovery = useTimerStore(s => s.resumeRecovery);
   const navigate = useNavigate();
 
   if (!hasRecovery) return null;
+
+  const handleResume = async () => {
+    const ok = await resumeRecovery();
+    if (ok) navigate('/session');
+  };
 
   return (
     <div className={cn(
@@ -18,10 +24,10 @@ export default function RecoveryBanner() {
     )}>
       <AlertCircle className="w-4 h-4 text-accent shrink-0" />
       <span className="flex-1 text-foreground/90">
-        A previous session was restored as paused.
+        An unfinished session was found. Resume where you left off?
       </span>
       <button
-        onClick={() => { navigate('/session'); }}
+        onClick={handleResume}
         className="text-primary hover:underline font-medium text-sm cursor-pointer"
       >
         Resume

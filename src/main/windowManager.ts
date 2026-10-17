@@ -2,7 +2,7 @@ import { BrowserWindow, screen, app } from 'electron';
 import path from 'path';
 import { TimerEngine } from '../core/timer/timerEngine';
 import { PreferencesStore } from '../core/persistence/preferences';
-import { TimerState, WidgetPosition } from '../shared/types';
+import { TimerState, WidgetPosition, IPC, AppSettings, ThemeDefinition } from '../shared/types';
 import { WIDGET_WIDTH, WIDGET_HEIGHT, WIDGET_MARGIN } from '../shared/constants';
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -146,12 +146,34 @@ export class WindowManager {
 
   broadcastTimerState(state: TimerState): void {
     const data = JSON.stringify(state);
-    this.mainWindow?.webContents.send('timer:state-update', data);
-    this.widgetWindow?.webContents.send('timer:state-update', data);
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send('timer:state-update', data);
+    }
+    if (this.widgetWindow && !this.widgetWindow.isDestroyed()) {
+      this.widgetWindow.webContents.send('timer:state-update', data);
+    }
+  }
+
+  broadcastSettings(settings: AppSettings): void {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send(IPC.SETTINGS_UPDATE, settings);
+    }
+    if (this.widgetWindow && !this.widgetWindow.isDestroyed()) {
+      this.widgetWindow.webContents.send(IPC.SETTINGS_UPDATE, settings);
+    }
+  }
+
+  broadcastThemes(themes: { builtIn: ThemeDefinition[]; custom: ThemeDefinition[] }): void {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send(IPC.THEMES_UPDATE, themes);
+    }
+    if (this.widgetWindow && !this.widgetWindow.isDestroyed()) {
+      this.widgetWindow.webContents.send(IPC.THEMES_UPDATE, themes);
+    }
   }
 
   focusMainWindow(): void {
-    if (this.mainWindow) {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       if (this.mainWindow.isMinimized()) this.mainWindow.restore();
       this.mainWindow.focus();
     } else {
@@ -160,7 +182,9 @@ export class WindowManager {
   }
 
   navigateMainWindow(route: string): void {
-    this.mainWindow?.webContents.send('navigate', route);
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send('navigate', route);
+    }
     this.focusMainWindow();
   }
 

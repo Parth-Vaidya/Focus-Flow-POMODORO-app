@@ -25,6 +25,7 @@ interface TimerStoreState {
   syncFromMain: () => Promise<void>;
   checkRecovery: () => Promise<void>;
   dismissRecovery: () => void;
+  resumeRecovery: () => Promise<boolean>;
   // Controls
   start: (taskName: string) => Promise<void>;
   pause: () => Promise<void>;
@@ -61,6 +62,28 @@ export const useTimerStore = create<TimerStoreState>()((set, get) => ({
   dismissRecovery: () => {
     set({ hasRecovery: false, recoveryDismissed: true });
     window.focusFlow.recovery.dismiss();
+  },
+
+  resumeRecovery: async () => {
+    try {
+      const result = await window.focusFlow.recovery.resume() as { ok: boolean; state?: string };
+      if (!result?.ok) {
+        // No valid recovery state — clear the banner silently
+        set({ hasRecovery: false, recoveryDismissed: true });
+        return false;
+      }
+      // Apply the restored (paused) timer state immediately
+      if (result.state) {
+        const restoredState = JSON.parse(result.state);
+        set({ timerState: restoredState, hasRecovery: false, recoveryDismissed: true });
+      } else {
+        set({ hasRecovery: false, recoveryDismissed: true });
+      }
+      return true;
+    } catch {
+      set({ hasRecovery: false, recoveryDismissed: true });
+      return false;
+    }
   },
 
   start: async (taskName) => {
