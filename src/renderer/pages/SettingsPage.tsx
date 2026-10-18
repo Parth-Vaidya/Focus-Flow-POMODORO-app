@@ -7,9 +7,10 @@ import { Slider } from '../components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Separator } from '../components/ui/separator';
 import { Button } from '../components/ui/button';
-import { Theme, TimerStyle } from '../../shared/types';
+import { Theme, TimerStyle, AudioPlaybackMode, BackgroundAudioSource } from '../../shared/types';
+import { useAudioStore } from '../stores/audioStore';
 import { toast } from '../components/ui/toaster';
-import { FolderOpen, RefreshCw } from 'lucide-react';
+import { FolderOpen, RefreshCw, Play, Square, Music } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 const MS_PER_MIN = 60_000;
@@ -77,13 +78,37 @@ const TIMER_STYLES: { value: TimerStyle; label: string }[] = [
 export default function SettingsPage() {
   const { settings, update, reset } = useSettingsStore();
   const { themes, load: loadThemes, refresh: refreshThemes, openFolder: openThemesFolder } = useThemeStore();
+  const {
+    tracks,
+    loadingLibrary,
+    isPlayingPreview,
+    previewingTrackId,
+    isPlaying,
+    loadLibrary,
+    refreshLibrary,
+    openAudioFolder,
+    selectTrack,
+    previewTrack,
+    previewBrownNoise,
+    stopPreview,
+    setAudioVolume,
+  } = useAudioStore();
+
   const [confirmClear, setConfirmClear] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [refreshingThemes, setRefreshingThemes] = useState(false);
+  const [refreshingAudio, setRefreshingAudio] = useState(false);
 
   useEffect(() => {
     loadThemes();
-  }, [loadThemes]);
+    loadLibrary();
+
+    return () => {
+      if (useAudioStore.getState().isPlayingPreview) {
+        useAudioStore.getState().stopPreview();
+      }
+    };
+  }, [loadThemes, loadLibrary]);
 
   const handleOpenThemesFolder = async () => {
     try {
@@ -106,6 +131,30 @@ export default function SettingsPage() {
       toast('Failed to refresh themes', 'error');
     } finally {
       setRefreshingThemes(false);
+    }
+  };
+
+  const handleOpenAudioFolder = async () => {
+    try {
+      const res = await openAudioFolder();
+      if (res && !res.ok) {
+        toast(res.error || 'Failed to open audio folder', 'error');
+      }
+    } catch {
+      toast('Failed to open audio folder', 'error');
+    }
+  };
+
+  const handleRefreshAudio = async () => {
+    setRefreshingAudio(true);
+    try {
+      const res = await refreshLibrary();
+      const count = res?.length ?? 0;
+      toast(`Audio library refreshed (${count} track${count === 1 ? '' : 's'} found)`, 'success');
+    } catch {
+      toast('Failed to refresh audio library', 'error');
+    } finally {
+      setRefreshingAudio(false);
     }
   };
 
@@ -132,6 +181,34 @@ export default function SettingsPage() {
   const isCustomTheme = themes.custom.some(t => t.id === settings.theme);
   const isBuiltInTheme = builtInList.some(t => t.id === settings.theme);
   const isUnknownTheme = !isCustomTheme && !isBuiltInTheme;
+
+  const hasTracks = tracks.length > 0;
+  const selectedTrack = tracks.find(t => t.id === settings.audioTrackId);
+  const currentTrackValue = selectedTrack ? selectedTrack.id : (tracks[0]?.id || '');
+  const isUnknownTrack = Boolean(settings.audioTrackId && !selectedTrack);
+  const previewingTrack = tracks.find(t => t.id === previewingTrackId);
+
+  const isBrownNoisePreviewing = isPlayingPreview && previewingTrackId === 'brown-noise';
+  const isTrackPreviewing = isPlayingPreview && previewingTrackId !== 'brown-noise';
+
+  const handleTogglePreview = () => {
+    if (isTrackPreviewing) {
+      stopPreview();
+    } else {
+      const trackIdToPreview = currentTrackValue;
+      if (trackIdToPreview) {
+        previewTrack(trackIdToPreview);
+      }
+    }
+  };
+
+  const handleToggleBrownNoisePreview = () => {
+    if (isBrownNoisePreviewing) {
+      stopPreview();
+    } else {
+      previewBrownNoise();
+    }
+  };
 
   return (
     <div className="p-8 max-w-2xl">
@@ -172,6 +249,18 @@ export default function SettingsPage() {
                 className="flex-1"
               />
               <span className="text-sm font-mono w-6 text-right tabular-nums">{settings.longBreakInterval}</span>
+            </div>
+          </SettingRow>
+          <Separator />
+          <SettingRow label="Total Focus Sessions" description="Target focus sessions to complete the cycle">
+            <div className="flex items-center gap-3 w-48">
+              <Slider
+                min={1} max={16} step={1}
+                value={[settings.totalFocusSessions ?? 4]}
+                onValueChange={([v]) => update({ totalFocusSessions: v })}
+                className="flex-1"
+              />
+              <span className="text-sm font-mono w-6 text-right tabular-nums">{settings.totalFocusSessions ?? 4}</span>
             </div>
           </SettingRow>
           <Separator />
@@ -296,6 +385,298 @@ export default function SettingsPage() {
       <section className="mb-6">
         <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Audio & Notifications</h2>
         <div className="bg-card rounded-xl border border-border px-4">
+          {/* Background Audio Toggle */}
+          <SettingRow
+            label="Background Audio"
+            description="Play background sound during active focus sessions"
+            htmlFor="audio-enabled"
+          >
+            <Switch
+              id="audio-enabled"
+              checked={settings.audioEnabled}
+              onCheckedChange={v => update({ audioEnabled: v })}
+            />
+          </SettingRow>
+
+          <Separator />
+
+          {/* Sound Source Selection */}
+          <SettingRow
+            label="Sound Source"
+            description="Select which background audio system to play during focus sessions"
+          >
+            <Select
+              value={settings.audioSource || 'tracks'}
+              onValueChange={v => update({ audioSource: v as BackgroundAudioSource })}
+            >
+              <SelectTrigger className="w-52">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="tracks">Local Audio Tracks</SelectItem>
+                <SelectItem value="brown-noise">Built-in Brown Noise</SelectItem>
+              </SelectContent>
+            </Select>
+          </SettingRow>
+
+          {/* If Brown Noise selected */}
+          {settings.audioSource === 'brown-noise' ? (
+            <>
+              <Separator />
+              <SettingRow
+                label="Brown Noise Sound"
+                description="Procedurally generated continuous brown noise with gentle filtering to mask distractions"
+              >
+                <Button
+                  variant={isBrownNoisePreviewing ? "secondary" : "outline"}
+                  size="sm"
+                  onClick={handleToggleBrownNoisePreview}
+                  className="flex items-center gap-1.5 shrink-0"
+                  title={isBrownNoisePreviewing ? "Stop brown noise preview" : "Preview brown noise"}
+                >
+                  {isBrownNoisePreviewing ? (
+                    <>
+                      <Square className="w-3.5 h-3.5 fill-current text-primary" />
+                      <span className="text-xs">Stop</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span className="text-xs">Preview Noise</span>
+                    </>
+                  )}
+                </Button>
+              </SettingRow>
+
+              {isBrownNoisePreviewing && (
+                <div className="mx-0 my-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/20 text-xs text-primary flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Music className="w-3.5 h-3.5 animate-pulse shrink-0" />
+                    <span>Previewing: <strong>Built-in Brown Noise</strong></span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={stopPreview}
+                    className="h-6 px-2 text-xs text-primary hover:text-primary hover:bg-primary/20"
+                  >
+                    Stop
+                  </Button>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              {/* Local Tracks Source Settings */}
+              <Separator />
+              <SettingRow
+                label="Audio Library"
+                description="Manage audio files stored in your local FocusFlow audio folder"
+              >
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleOpenAudioFolder}
+                    className="flex items-center gap-1.5"
+                  >
+                    <FolderOpen className="w-3.5 h-3.5" />
+                    <span>Open Audio Folder</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRefreshAudio}
+                    disabled={refreshingAudio}
+                    className="flex items-center gap-1.5"
+                  >
+                    <RefreshCw className={cn("w-3.5 h-3.5", refreshingAudio && "animate-spin")} />
+                    <span>Refresh Library</span>
+                  </Button>
+                </div>
+              </SettingRow>
+
+              {/* Library State Message */}
+              {loadingLibrary ? (
+                <div className="mx-0 my-2 px-3 py-2 rounded-lg bg-muted/20 border border-border/40 text-xs text-muted-foreground">
+                  Scanning local audio library...
+                </div>
+              ) : !hasTracks ? (
+                <div className="mx-0 my-2 p-3 rounded-lg bg-muted/40 border border-border/60 text-xs text-muted-foreground">
+                  <p className="font-medium text-foreground/90 mb-1">No audio files found</p>
+                  <p>
+                    Add supported audio files (<code>.mp3</code>, <code>.wav</code>, <code>.ogg</code>, <code>.flac</code>, <code>.m4a</code>, <code>.aac</code>) into your audio folder. Click <strong>Open Audio Folder</strong> to copy your music files, then click <strong>Refresh Library</strong>.
+                  </p>
+                </div>
+              ) : (
+                <div className="mx-0 my-2 px-3 py-2 rounded-lg bg-muted/20 border border-border/40 text-xs text-muted-foreground flex items-center justify-between">
+                  <span>
+                    {tracks.length} track{tracks.length > 1 ? 's' : ''} discovered in library
+                  </span>
+                  <span className="text-[11px] text-muted-foreground/70">
+                    MP3, WAV, OGG, FLAC, M4A, AAC
+                  </span>
+                </div>
+              )}
+
+              {/* Track Selection and Preview */}
+              <Separator />
+              <SettingRow
+                label="Preferred Track"
+                description="Select the default audio track for sessions and preview playback"
+              >
+                <div className="flex items-center gap-2">
+                  {hasTracks ? (
+                    <Select
+                      value={currentTrackValue}
+                      onValueChange={v => selectTrack(v)}
+                    >
+                      <SelectTrigger className="w-52">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {tracks.map(t => (
+                          <SelectItem key={t.id} value={t.id}>
+                            <span className="truncate max-w-[180px] inline-block">{t.name}</span>
+                          </SelectItem>
+                        ))}
+                        {isUnknownTrack && (
+                          <SelectItem value={settings.audioTrackId!}>
+                            <span className="text-destructive truncate max-w-[180px] inline-block">
+                              (Missing track)
+                            </span>
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Select disabled value="none">
+                      <SelectTrigger className="w-52 text-muted-foreground">
+                        <SelectValue placeholder="No tracks in library" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No tracks in library</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+
+                  <Button
+                    variant={isTrackPreviewing ? "secondary" : "outline"}
+                    size="sm"
+                    onClick={handleTogglePreview}
+                    disabled={!hasTracks}
+                    className="flex items-center gap-1.5 shrink-0"
+                    title={isTrackPreviewing ? "Stop preview" : "Preview selected track"}
+                  >
+                    {isTrackPreviewing ? (
+                      <>
+                        <Square className="w-3.5 h-3.5 fill-current text-primary" />
+                        <span className="text-xs">Stop</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span className="text-xs">Preview</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </SettingRow>
+
+              {/* Preview Banner */}
+              {isTrackPreviewing && previewingTrack && (
+                <div className="mx-0 my-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/20 text-xs text-primary flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Music className="w-3.5 h-3.5 animate-pulse shrink-0" />
+                    <span>Previewing: <strong>{previewingTrack.name}</strong></span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={stopPreview}
+                    className="h-6 px-2 text-xs text-primary hover:text-primary hover:bg-primary/20"
+                  >
+                    Stop
+                  </Button>
+                </div>
+              )}
+
+              <Separator />
+
+              {/* Playback Mode */}
+              <SettingRow
+                label="Playback Mode"
+                description="How tracks advance during background playback"
+              >
+                <Select
+                  value={settings.audioMode || 'sequential'}
+                  onValueChange={v => update({ audioMode: v as AudioPlaybackMode })}
+                >
+                  <SelectTrigger className="w-52">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sequential">Sequential (In order)</SelectItem>
+                    <SelectItem value="shuffle">Shuffle (Random track)</SelectItem>
+                    <SelectItem value="single">Single (Repeat track)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </SettingRow>
+            </>
+          )}
+
+          {/* Session Playback Indicator */}
+          {isPlaying && (
+            <div className="mx-0 my-2 px-3 py-1.5 rounded-lg bg-secondary/50 border border-border/40 text-xs text-muted-foreground flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                Session background audio is currently active ({settings.audioSource === 'brown-noise' ? 'Brown Noise' : 'Local Track'})
+              </span>
+            </div>
+          )}
+
+          <Separator />
+
+          {/* Background Audio Volume */}
+          <SettingRow
+            label="Background Audio Volume"
+            description="Set default volume level for background music and noise"
+          >
+            <div className="flex items-center gap-3 w-48">
+              <Slider
+                min={0} max={1} step={0.05}
+                value={[settings.audioVolume ?? 0.5]}
+                onValueChange={([v]) => {
+                  update({ audioVolume: v, brownNoiseVolume: v });
+                  setAudioVolume(v);
+                }}
+                className="flex-1"
+              />
+              <span className="text-sm font-mono w-10 text-right tabular-nums">
+                {Math.round((settings.audioVolume ?? 0.5) * 100)}%
+              </span>
+            </div>
+          </SettingRow>
+
+          <Separator />
+
+          {/* Break Session Playback Toggle */}
+          <SettingRow
+            label="Play background audio during breaks"
+            description="Allow background audio to continue during short and long breaks"
+            htmlFor="break-audio"
+          >
+            <Switch
+              id="break-audio"
+              checked={settings.playAudioDuringBreaks}
+              disabled={!settings.audioEnabled}
+              onCheckedChange={v => update({ playAudioDuringBreaks: v })}
+            />
+          </SettingRow>
+
+          <Separator />
+
+          {/* Completion Alert Sound */}
           <SettingRow label="Completion Alert Sound" description="Play a gentle chime when a session finishes" htmlFor="alert-sound">
             <Switch
               id="alert-sound"
@@ -303,19 +684,10 @@ export default function SettingsPage() {
               onCheckedChange={v => update({ alertSoundEnabled: v })}
             />
           </SettingRow>
+
           <Separator />
-          <SettingRow label="Brown Noise Volume" description="Set preferred background brown noise level">
-            <div className="flex items-center gap-3 w-48">
-              <Slider
-                min={0} max={1} step={0.05}
-                value={[settings.brownNoiseVolume]}
-                onValueChange={([v]) => update({ brownNoiseVolume: v })}
-                className="flex-1"
-              />
-              <span className="text-sm font-mono w-10 text-right tabular-nums">{Math.round(settings.brownNoiseVolume * 100)}%</span>
-            </div>
-          </SettingRow>
-          <Separator />
+
+          {/* Desktop Notifications */}
           <SettingRow label="Desktop Notifications" description="Show native OS notification when sessions complete" htmlFor="notifications">
             <Switch
               id="notifications"

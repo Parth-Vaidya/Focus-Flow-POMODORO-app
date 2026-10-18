@@ -50,39 +50,16 @@ export class TimerEngine {
     this.state = {
       ...IDLE_STATE,
       totalDurationMs: this.settings.focusDurationMs,
+      remainingMs: this.settings.focusDurationMs,
     };
   }
 
   // ── Public controls ────────────────────────────────────────────────────────
 
   start(taskName: string = '', type: SessionType = 'focus'): void {
-    this.stopTick();
-    const duration = this.getDurationForType(type);
-    const now = Date.now();
-    const sessionId = uuidv4();
-
-    this.sessionDeadlineMs = now + duration;
-    this.sessionStartWallMs = now;
-    this.accumulatedPausedMs = 0;
-    this.pauseWallMs = null;
-    this.sessionPausedRemainingMs = null;
-
-    this.state = {
-      ...this.state,
-      sessionType: type,
-      status: 'running',
-      remainingMs: duration,
-      totalDurationMs: duration,
-      taskName,
-      sessionActiveFocusMs: 0,
-      startedAt: now,
-      pausedAt: null,
-      sessionId,
-    };
-
-    this.startTick();
-    this.startRecoverySave();
-    this.emit();
+    // If starting a new cycle from idle, start with cycleCount 0
+    const cycleCount = this.state.status === 'idle' ? 0 : this.state.cycleCount;
+    this.beginSession(type, taskName, cycleCount);
   }
 
   pause(): void {
@@ -125,69 +102,82 @@ export class TimerEngine {
     };
 
     this.startTick();
+    this.callbacks.onRecoverySave(this.state);
     this.emit();
   }
 
   skip(): void {
     if (this.state.status === 'idle') return;
-    this.stopTick();
-    this.stopRecoverySave();
+    const now = Date.now();
+    const taskName = this.state.taskName;
 
-    // Do not count an unfinished focus session — reset to idle on Home
-    this.state = {
-      ...IDLE_STATE,
-      sessionType: 'focus',
-      status: 'idle',
-      remainingMs: this.settings.focusDurationMs,
-      totalDurationMs: this.settings.focusDurationMs,
-      taskName: '',
-      cycleCount: this.state.cycleCount,
-      completedTodayCount: this.state.completedTodayCount,
-      activeFocusMsToday: this.state.activeFocusMsToday,
-    };
-    this.emit();
+    // If currently in focus, record skipped focus session
+    if (this.state.sessionType === 'focus') {
+      const elapsed = Math.max(0, this.state.totalDurationMs - this.calculateRemainingMs());
+      const record: SessionRecord = {
+        id: this.state.sessionId || uuidv4(),
+        sessionType: 'focus',
+        taskName: taskName || null,
+        configuredDurationMs: this.state.totalDurationMs,
+        startedAt: this.state.startedAt || now,
+        endedAt: now,
+        activeFocusMs: elapsed,
+        status: 'skipped',
+      };
+      this.callbacks.onSessionComplete(record);
+
+      // Advance to the appropriate break
+      const isLongBreak = (this.state.cycleCount + 1) % this.settings.longBreakInterval === 0;
+      const nextBreak: SessionType = isLongBreak ? 'long-break' : 'short-break';
+      this.beginSession(nextBreak, taskName, this.state.cycleCount);
+    } else {
+      // Skipping a break: check if the overall cycle has finished
+      const totalLimit = this.settings.totalFocusSessions || this.settings.longBreakInterval;
+      if (totalLimit > 0 && this.state.cycleCount >= totalLimit) {
+        this.completeCycle();
+      } else {
+        this.beginSession('focus', taskName, this.state.cycleCount);
+      }
+    }
   }
 
   restart(): void {
     if (this.state.status === 'idle') return;
-    this.stopTick();
-    const now = Date.now();
-    const duration = this.getDurationForType(this.state.sessionType);
-
-    this.sessionDeadlineMs = now + duration;
-    this.sessionStartWallMs = now;
-    this.accumulatedPausedMs = 0;
-    this.pauseWallMs = null;
-    this.sessionPausedRemainingMs = null;
-
-    const sessionId = uuidv4();
-    this.state = {
-      ...this.state,
-      status: 'running',
-      remainingMs: duration,
-      totalDurationMs: duration,
-      sessionActiveFocusMs: 0,
-      startedAt: now,
-      pausedAt: null,
-      sessionId,
-    };
-
-    this.startTick();
-    this.callbacks.onRecoverySave(this.state);
-    this.emit();
+    // Restart current session cleanly
+    this.beginSession(this.state.sessionType, this.state.taskName, this.state.cycleCount);
   }
 
   stop(): void {
+    if (this.state.status === 'idle') return;
     this.stopTick();
     this.stopRecoverySave();
+
+    const now = Date.now();
+    // Record as stopped if active session
+    if (this.state.sessionType === 'focus') {
+      const elapsed = Math.max(0, this.state.totalDurationMs - this.calculateRemainingMs());
+      const record: SessionRecord = {
+        id: this.state.sessionId || uuidv4(),
+        sessionType: 'focus',
+        taskName: this.state.taskName || null,
+        configuredDurationMs: this.state.totalDurationMs,
+        startedAt: this.state.startedAt || now,
+        endedAt: now,
+        activeFocusMs: elapsed,
+        status: 'stopped',
+      };
+      this.callbacks.onSessionComplete(record);
+    }
 
     this.state = {
       ...IDLE_STATE,
       totalDurationMs: this.settings.focusDurationMs,
+      remainingMs: this.settings.focusDurationMs,
       completedTodayCount: this.state.completedTodayCount,
       activeFocusMsToday: this.state.activeFocusMsToday,
-      cycleCount: this.state.cycleCount,
+      cycleCount: 0,
     };
+    this.callbacks.onRecoverySave(this.state);
     this.emit();
   }
 
@@ -216,9 +206,13 @@ export class TimerEngine {
 
   updateSettings(settings: AppSettings): void {
     this.settings = settings;
-    // Only update idle total duration
+    // Only update idle total duration and remaining ms
     if (this.state.status === 'idle') {
-      this.state = { ...this.state, totalDurationMs: settings.focusDurationMs };
+      this.state = {
+        ...this.state,
+        totalDurationMs: settings.focusDurationMs,
+        remainingMs: settings.focusDurationMs,
+      };
       this.emit();
     }
   }
@@ -297,34 +291,72 @@ export class TimerEngine {
     const now = Date.now();
     const completedType = this.state.sessionType;
     const completedSessionId = this.state.sessionId;
-
-    // Build and persist record
-    const record: SessionRecord = {
-      id: completedSessionId || uuidv4(),
-      sessionType: completedType,
-      taskName: this.state.taskName || null,
-      configuredDurationMs: this.state.totalDurationMs,
-      startedAt: this.state.startedAt || now - this.state.totalDurationMs,
-      endedAt: now,
-      activeFocusMs: completedType === 'focus' ? this.state.totalDurationMs : 0,
-      status: 'completed',
-    };
-
-    // Update counters for focus sessions
-    let newCycleCount = this.state.cycleCount;
-    let newCompletedToday = this.state.completedTodayCount;
-    let newActiveFocusMsToday = this.state.activeFocusMsToday;
+    const taskName = this.state.taskName || '';
 
     if (completedType === 'focus') {
-      newCycleCount = (this.state.cycleCount + 1) % this.settings.longBreakInterval;
-      newCompletedToday = this.state.completedTodayCount + 1;
-      newActiveFocusMsToday = this.state.activeFocusMsToday + this.state.totalDurationMs;
+      const newCompletedToday = this.state.completedTodayCount + 1;
+      const newActiveFocusMsToday = this.state.activeFocusMsToday + this.state.totalDurationMs;
+      const newCycleCount = this.state.cycleCount + 1;
+
+      // Build and persist completed focus session record
+      const record: SessionRecord = {
+        id: completedSessionId || uuidv4(),
+        sessionType: 'focus',
+        taskName: taskName || null,
+        configuredDurationMs: this.state.totalDurationMs,
+        startedAt: this.state.startedAt || now - this.state.totalDurationMs,
+        endedAt: now,
+        activeFocusMs: this.state.totalDurationMs,
+        status: 'completed',
+      };
+
+      this.state.completedTodayCount = newCompletedToday;
+      this.state.activeFocusMsToday = newActiveFocusMsToday;
+      this.state.cycleCount = newCycleCount;
+
+      // Notify persistence/notification layer exactly once
+      this.callbacks.onSessionComplete(record);
+
+      // Determine break type: long break interval or short break
+      const isLongBreak = (newCycleCount % this.settings.longBreakInterval === 0);
+      const nextBreakType: SessionType = isLongBreak ? 'long-break' : 'short-break';
+
+      // Automatically transition to the break countdown
+      this.beginSession(nextBreakType, taskName, newCycleCount);
+    } else {
+      // Break session completed ('short-break' or 'long-break')
+      const record: SessionRecord = {
+        id: completedSessionId || uuidv4(),
+        sessionType: completedType,
+        taskName: taskName || null,
+        configuredDurationMs: this.state.totalDurationMs,
+        startedAt: this.state.startedAt || now - this.state.totalDurationMs,
+        endedAt: now,
+        activeFocusMs: 0,
+        status: 'completed',
+      };
+
+      // Notify completion chime and notification (do NOT count as completed focus session)
+      this.callbacks.onSessionComplete(record);
+
+      // Check if overall cycle is complete
+      const totalLimit = this.settings.totalFocusSessions || this.settings.longBreakInterval;
+      const isCycleComplete = totalLimit > 0 && this.state.cycleCount >= totalLimit;
+
+      if (isCycleComplete) {
+        // Final required break finished: complete cycle and return to Home
+        this.completeCycle();
+      } else {
+        // Automatically start next focus session in the cycle
+        this.beginSession('focus', taskName, this.state.cycleCount);
+      }
     }
+  }
 
-    // Notify persistence/notification layer exactly once
-    this.callbacks.onSessionComplete(record);
+  private completeCycle(): void {
+    this.stopTick();
+    this.stopRecoverySave();
 
-    // STOP the automatic cycle and return the main UI to Home
     this.state = {
       ...IDLE_STATE,
       sessionType: 'focus',
@@ -332,38 +364,16 @@ export class TimerEngine {
       remainingMs: this.settings.focusDurationMs,
       totalDurationMs: this.settings.focusDurationMs,
       taskName: '',
-      cycleCount: newCycleCount,
-      completedTodayCount: newCompletedToday,
-      activeFocusMsToday: newActiveFocusMsToday,
+      cycleCount: 0,
+      completedTodayCount: this.state.completedTodayCount,
+      activeFocusMsToday: this.state.activeFocusMsToday,
     };
+    this.callbacks.onRecoverySave(this.state);
     this.emit();
   }
 
-  private getNextSessionType(completing: boolean): SessionType {
-    if (this.state.sessionType !== 'focus') {
-      // After any break -> focus
-      return 'focus';
-    }
-
-    if (!completing) {
-      // Skip without completing: go to the appropriate break anyway
-      // Use existing cycle count
-      const count = this.state.cycleCount;
-      const atLongBreak = count > 0 && count % this.settings.longBreakInterval === 0;
-      return atLongBreak ? 'long-break' : 'short-break';
-    }
-
-    // Completing a focus session: new count is state.cycleCount+1
-    // newCycleCount was already computed as (count+1) % interval
-    // If count+1 reaches interval, it's a long break
-    const nextCount = this.state.cycleCount + 1;
-    if (nextCount % this.settings.longBreakInterval === 0) {
-      return 'long-break';
-    }
-    return 'short-break';
-  }
-
-  private beginSession(type: SessionType, taskName: string): void {
+  private beginSession(type: SessionType, taskName: string, cycleCount: number): void {
+    this.stopTick();
     const now = Date.now();
     const duration = this.getDurationForType(type);
     const sessionId = uuidv4();
@@ -381,6 +391,7 @@ export class TimerEngine {
       remainingMs: duration,
       totalDurationMs: duration,
       taskName,
+      cycleCount,
       sessionActiveFocusMs: 0,
       startedAt: now,
       pausedAt: null,
@@ -389,6 +400,7 @@ export class TimerEngine {
 
     this.startTick();
     this.startRecoverySave();
+    this.callbacks.onRecoverySave(this.state);
     this.emit();
   }
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Play, Pause, SkipForward, RotateCcw, EyeOff } from 'lucide-react';
+import { Play, Pause, SkipForward, RotateCcw, EyeOff, ChevronUp, GripVertical } from 'lucide-react';
 import { TimerState, AppSettings } from '../../shared/types';
 import { DEFAULT_SETTINGS } from '../../shared/constants';
 import { ThemeProvider } from '../components/ThemeProvider';
@@ -23,9 +23,14 @@ export default function FloatingWidget() {
   });
 
   const [isHovered, setIsHovered] = useState(false);
+  const [isCompact, setIsCompact] = useState(false);
+
+  // Pointer drag tracking refs
+  const pointerDownPosRef = useRef<{ screenX: number; screenY: number } | null>(null);
   const isDraggingRef = useRef(false);
-  const dragStartPos = useRef<{ screenX: number; screenY: number } | null>(null);
-  const dragThreshold = 5; // px to differentiate click vs drag
+  const suppressClickRef = useRef(false);
+  const rafIdRef = useRef<number | null>(null);
+  const latestPosRef = useRef<{ screenX: number; screenY: number } | null>(null);
 
   const loadSettings = useSettingsStore(s => s.load);
   const settings = useSettingsStore(s => s.settings);
@@ -46,7 +51,11 @@ export default function FloatingWidget() {
     // Listen to timer updates
     const onUpdate = (stateJson: string) => {
       try {
-        setTimerState(JSON.parse(stateJson));
+        const state: TimerState = JSON.parse(stateJson);
+        setTimerState(state);
+        if (state.status === 'idle') {
+          setIsCompact(false);
+        }
       } catch {}
     };
 
@@ -57,47 +66,134 @@ export default function FloatingWidget() {
     };
   }, [loadSettings]);
 
-  // Click vs Drag handling
-  const handleMouseDown = (e: React.MouseEvent) => {
-    dragStartPos.current = { screenX: e.screenX, screenY: e.screenY };
-    isDraggingRef.current = false;
+  const handleCompact = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setIsCompact(true);
+    window.focusFlow?.widget?.setCompact(true);
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (dragStartPos.current) {
-      const dx = Math.abs(e.screenX - dragStartPos.current.screenX);
-      const dy = Math.abs(e.screenY - dragStartPos.current.screenY);
-      if (dx > dragThreshold || dy > dragThreshold) {
-        isDraggingRef.current = true;
+  const handleExpand = () => {
+    setIsCompact(false);
+    window.focusFlow?.widget?.setCompact(false);
+  };
+
+  const handleOpenMain = () => {
+    const route = (timerState.status === 'running' || timerState.status === 'paused')
+      ? '/session'
+      : '/';
+    window.focusFlow?.widget?.focusMain(route);
+  };
+
+  // Factory to create pointer drag & click discrimination handlers
+  const createDragHandlers = (onClickAction: () => void) => ({
+    onPointerDown: (e: React.PointerEvent) => {
+      if (e.button !== 0) return;
+      const target = e.target as HTMLElement;
+      if (target.closest('button, input, select, textarea, [data-interactive="true"]')) {
+        return;
       }
-    }
-  };
 
-  const handleMouseUp = (e: React.MouseEvent) => {
-    // End of potential drag
-    if (isDraggingRef.current) {
-      // User dragged: ask main process to snap position to nearest edge
-      window.focusFlow?.widget?.getPosition().then((pos: { x: number; y: number } | null) => {
-        if (pos) {
-          // Send to main process with edge auto-detection
-          window.focusFlow?.widget?.setPosition({
-            x: pos.x,
-            y: pos.y,
-            edge: pos.x > 800 ? 'right' : 'left', // main process clamps & docks to workArea
+      const screenX = Math.round(e.screenX);
+      const screenY = Math.round(e.screenY);
+      pointerDownPosRef.current = { screenX, screenY };
+      isDraggingRef.current = false;
+      try {
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      } catch {}
+    },
+
+    onPointerMove: (e: React.PointerEvent) => {
+      if (!pointerDownPosRef.current) return;
+
+      const screenX = Math.round(e.screenX);
+      const screenY = Math.round(e.screenY);
+      const dx = screenX - pointerDownPosRef.current.screenX;
+      const dy = screenY - pointerDownPosRef.current.screenY;
+
+      // 6px movement threshold to distinguish drag from click
+      if (!isDraggingRef.current && (Math.abs(dx) >= 6 || Math.abs(dy) >= 6)) {
+        isDraggingRef.current = true;
+        window.focusFlow?.widget?.dragStart(pointerDownPosRef.current.screenX, pointerDownPosRef.current.screenY);
+      }
+
+      if (isDraggingRef.current) {
+        latestPosRef.current = { screenX, screenY };
+        if (!rafIdRef.current) {
+          rafIdRef.current = requestAnimationFrame(() => {
+            rafIdRef.current = null;
+            if (isDraggingRef.current && latestPosRef.current) {
+              window.focusFlow?.widget?.dragMove(latestPosRef.current.screenX, latestPosRef.current.screenY);
+            }
           });
         }
-      });
-    } else {
-      // Intentional click on widget body: focus main app
-      const route = (timerState.status === 'running' || timerState.status === 'paused')
-        ? '/session'
-        : '/';
-      window.focusFlow?.widget?.focusMain(route);
-    }
+      }
+    },
 
-    dragStartPos.current = null;
-    isDraggingRef.current = false;
-  };
+    onPointerUp: (e: React.PointerEvent) => {
+      if (!pointerDownPosRef.current) return;
+
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {}
+
+      const wasDragging = isDraggingRef.current;
+      if (wasDragging) {
+        if (latestPosRef.current) {
+          window.focusFlow?.widget?.dragMove(latestPosRef.current.screenX, latestPosRef.current.screenY);
+        }
+        suppressClickRef.current = true;
+        window.focusFlow?.widget?.dragEnd();
+        setTimeout(() => {
+          suppressClickRef.current = false;
+        }, 120);
+      } else {
+        suppressClickRef.current = true;
+        onClickAction();
+        setTimeout(() => {
+          suppressClickRef.current = false;
+        }, 120);
+      }
+
+      pointerDownPosRef.current = null;
+      latestPosRef.current = null;
+      isDraggingRef.current = false;
+    },
+
+    onPointerCancel: (e: React.PointerEvent) => {
+      if (isDraggingRef.current) {
+        window.focusFlow?.widget?.dragEnd();
+      }
+      pointerDownPosRef.current = null;
+      latestPosRef.current = null;
+      isDraggingRef.current = false;
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+    },
+
+    onClickCapture: (e: React.MouseEvent) => {
+      if (suppressClickRef.current) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
+    },
+
+    onClick: (e: React.MouseEvent) => {
+      if (suppressClickRef.current) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
+    },
+  });
+
+  const compactDragHandlers = createDragHandlers(handleExpand);
+  const fullWidgetDragHandlers = createDragHandlers(handleOpenMain);
 
   const isRunning = timerState.status === 'running';
   const isPaused = timerState.status === 'paused';
@@ -118,22 +214,51 @@ export default function FloatingWidget() {
       ? 'bg-[hsl(var(--timer-short-break))]'
       : 'bg-[hsl(var(--timer-long-break))]';
 
+  if (isCompact) {
+    return (
+      <ThemeProvider>
+        <div
+          className={cn(
+            'w-full h-full rounded-full select-none cursor-grab active:cursor-grabbing',
+            'bg-card/95 backdrop-blur-md border border-border/80 shadow-2xl',
+            'flex items-center justify-between overflow-hidden relative transition-colors duration-200 hover:border-primary/50'
+          )}
+          {...compactDragHandlers}
+          title="Drag to move, click to expand"
+        >
+          {/* Drag Handle with Session Dot */}
+          <div className="flex items-center gap-1.5 h-full pl-3 pr-2 shrink-0 pointer-events-none select-none">
+            <div className={cn('w-2 h-2 rounded-full shrink-0', sessionColor, isRunning && 'animate-pulse')} />
+            <GripVertical className="w-3.5 h-3.5 text-muted-foreground/60" />
+          </div>
+
+          {/* Click to expand area */}
+          <div className="flex-1 flex items-center justify-end gap-1.5 h-full pr-3 group pointer-events-none select-none">
+            <span className="text-xs font-bold font-mono tracking-tight tabular-nums text-foreground group-hover:text-primary transition-colors">
+              {formatMs(timerState.remainingMs)}
+            </span>
+            <ChevronUp className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+          </div>
+        </div>
+      </ThemeProvider>
+    );
+  }
+
   return (
     <ThemeProvider>
       <div
         className={cn(
-          'w-[220px] h-[120px] rounded-2xl p-3.5 select-none',
+          'w-full h-full rounded-2xl p-3.5 select-none cursor-grab active:cursor-grabbing',
           'bg-card/95 backdrop-blur-md border border-border/80 shadow-2xl',
-          'flex flex-col justify-between overflow-hidden relative cursor-default drag-region transition-all duration-200'
+          'flex flex-col justify-between overflow-hidden relative transition-colors duration-200'
         )}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
+        {...fullWidgetDragHandlers}
+        title="Drag to move, click to reopen session"
       >
         {/* Top bar: Type + Task */}
-        <div className="flex items-center justify-between gap-1 pointer-events-none">
+        <div className="flex items-center justify-between gap-1 select-none pointer-events-none">
           <div className="flex items-center gap-1.5 min-w-0">
             <div className={cn('w-2 h-2 rounded-full shrink-0', sessionColor)} />
             <span className="text-[11px] font-semibold tracking-wide uppercase text-foreground/80 truncate">
@@ -142,56 +267,66 @@ export default function FloatingWidget() {
           </div>
 
           <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums font-mono">
-            {timerState.cycleCount}/{settings.longBreakInterval}
+            {timerState.cycleCount}/{settings.totalFocusSessions || settings.longBreakInterval || 4}
           </span>
         </div>
 
-        {/* Task name */}
-        <div className="pointer-events-none">
-          {timerState.taskName ? (
-            <p className="text-[11px] text-muted-foreground truncate leading-tight">
-              {timerState.taskName}
-            </p>
-          ) : (
-            <p className="text-[10px] text-muted-foreground/50 leading-tight">
-              FocusFlow
-            </p>
-          )}
-        </div>
-
-        {/* Center: Countdown + Progress bar */}
-        <div>
-          <div className="flex items-baseline justify-between mb-1.5 pointer-events-none">
-            <span className="text-2xl font-bold font-mono tracking-tight tabular-nums text-foreground">
-              {formatMs(timerState.remainingMs)}
-            </span>
-            {isPaused && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium uppercase">
-                Paused
-              </span>
+        {/* Main Body (Clicks bubble to widget handler to reopen main window) */}
+        <div className="flex-1 flex flex-col justify-between py-1 select-none pointer-events-none">
+          {/* Task name */}
+          <div>
+            {timerState.taskName ? (
+              <p className="text-[11px] text-muted-foreground truncate leading-tight">
+                {timerState.taskName}
+              </p>
+            ) : (
+              <p className="text-[10px] text-muted-foreground/50 leading-tight">
+                FocusFlow
+              </p>
             )}
           </div>
 
-          {/* Thin progress track */}
-          <div className="h-1 w-full bg-secondary rounded-full overflow-hidden pointer-events-none">
-            <div
-              className={cn('h-full transition-all duration-300 rounded-full', sessionColor)}
-              style={{ width: `${progress * 100}%` }}
-            />
+          {/* Center: Countdown + Progress bar */}
+          <div>
+            <div className="flex items-baseline justify-between mb-1.5">
+              <span className="text-2xl font-bold font-mono tracking-tight tabular-nums text-foreground">
+                {formatMs(timerState.remainingMs)}
+              </span>
+              {isPaused && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium uppercase">
+                  Paused
+                </span>
+              )}
+            </div>
+
+            {/* Thin progress track */}
+            <div className="h-1 w-full bg-secondary rounded-full overflow-hidden">
+              <div
+                className={cn('h-full transition-all duration-300 rounded-full', sessionColor)}
+                style={{ width: `${progress * 100}%` }}
+              />
+            </div>
           </div>
         </div>
 
         {/* Hover Action Strip */}
         <div
+          data-interactive="true"
           className={cn(
             'absolute inset-x-0 bottom-0 py-1.5 px-3 bg-card/95 backdrop-blur-md border-t border-border/60',
-            'flex items-center justify-around no-drag transition-transform duration-150',
+            'flex items-center justify-around transition-transform duration-150',
             isHovered ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'
           )}
           onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onMouseUp={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          onPointerUp={(e) => e.stopPropagation()}
         >
           {/* Pause / Resume */}
           <button
+            data-interactive="true"
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={async (e) => {
               e.stopPropagation();
               if (isRunning) await window.focusFlow?.timer?.pause();
@@ -206,6 +341,8 @@ export default function FloatingWidget() {
 
           {/* Skip */}
           <button
+            data-interactive="true"
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={async (e) => {
               e.stopPropagation();
               await window.focusFlow?.timer?.skip();
@@ -219,6 +356,8 @@ export default function FloatingWidget() {
 
           {/* Restart */}
           <button
+            data-interactive="true"
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={async (e) => {
               e.stopPropagation();
               await window.focusFlow?.timer?.restart();
@@ -230,15 +369,14 @@ export default function FloatingWidget() {
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
 
-          {/* Hide widget */}
+          {/* Compact launcher */}
           <button
-            onClick={async (e) => {
-              e.stopPropagation();
-              await window.focusFlow?.widget?.hide();
-            }}
+            data-interactive="true"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={handleCompact}
             className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
-            aria-label="Hide widget"
-            title="Hide widget (keep timer running)"
+            aria-label="Compact widget"
+            title="Compact widget (launcher)"
           >
             <EyeOff className="w-3.5 h-3.5" />
           </button>

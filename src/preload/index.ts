@@ -1,11 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { IPC, AppSettings, WidgetPosition, SessionRecord, ThemeDefinition } from '../shared/types';
+import { IPC, AppSettings, WidgetPosition, SessionRecord, ThemeDefinition, AudioTrack } from '../shared/types';
 
 // Type for the timer state update listener
 type TimerStateListener = (stateJson: string) => void;
 type NavigateListener = (route: string) => void;
 
 const timerListeners = new Map<TimerStateListener, (event: Electron.IpcRendererEvent, data: string) => void>();
+const navigateListeners = new Map<NavigateListener, (event: Electron.IpcRendererEvent, route: string) => void>();
 
 // Narrow, typed API exposed to the renderer
 const focusFlowAPI = {
@@ -22,6 +23,10 @@ const focusFlowAPI = {
       const listener = (_event: Electron.IpcRendererEvent, data: string) => cb(data);
       timerListeners.set(cb, listener);
       ipcRenderer.on(IPC.TIMER_STATE_UPDATE, listener);
+      return () => {
+        ipcRenderer.removeListener(IPC.TIMER_STATE_UPDATE, listener);
+        timerListeners.delete(cb);
+      };
     },
     offStateUpdate: (cb: TimerStateListener) => {
       const listener = timerListeners.get(cb);
@@ -66,13 +71,20 @@ const focusFlowAPI = {
   widget: {
     show: () => ipcRenderer.invoke(IPC.WIDGET_SHOW),
     hide: () => ipcRenderer.invoke(IPC.WIDGET_HIDE),
+    setCompact: (compact: boolean) => ipcRenderer.invoke(IPC.WIDGET_SET_COMPACT, compact),
     setPosition: (pos: WidgetPosition) => ipcRenderer.invoke(IPC.WIDGET_SET_POSITION, pos),
     getPosition: () => ipcRenderer.invoke(IPC.WIDGET_GET_POSITION),
+    dragStart: (screenX: number, screenY: number) => ipcRenderer.send(IPC.WIDGET_DRAG_START, { screenX, screenY }),
+    dragMove: (screenX: number, screenY: number) => ipcRenderer.send(IPC.WIDGET_DRAG_MOVE, { screenX, screenY }),
+    dragEnd: () => ipcRenderer.send(IPC.WIDGET_DRAG_END),
     focusMain: (route?: string) => ipcRenderer.invoke(IPC.MAIN_FOCUS, route),
   },
 
   // Audio
   audio: {
+    getLibrary: (): Promise<AudioTrack[]> => ipcRenderer.invoke(IPC.AUDIO_GET_LIBRARY),
+    openFolder: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke(IPC.AUDIO_OPEN_FOLDER),
+    refreshLibrary: (): Promise<AudioTrack[]> => ipcRenderer.invoke(IPC.AUDIO_REFRESH_LIBRARY),
     startBrownNoise: (volume?: number) => ipcRenderer.invoke(IPC.AUDIO_BROWN_NOISE_START, volume),
     stopBrownNoise: () => ipcRenderer.invoke(IPC.AUDIO_BROWN_NOISE_STOP),
     setBrownNoiseVolume: (volume: number) => ipcRenderer.invoke(IPC.AUDIO_BROWN_NOISE_VOLUME, volume),
@@ -105,7 +117,20 @@ const focusFlowAPI = {
 
   // Navigation (from main to renderer)
   onNavigate: (cb: NavigateListener) => {
-    ipcRenderer.on(IPC.NAVIGATE, (_event, route) => cb(route));
+    const listener = (_event: Electron.IpcRendererEvent, route: string) => cb(route);
+    navigateListeners.set(cb, listener);
+    ipcRenderer.on(IPC.NAVIGATE, listener);
+    return () => {
+      ipcRenderer.removeListener(IPC.NAVIGATE, listener);
+      navigateListeners.delete(cb);
+    };
+  },
+  offNavigate: (cb: NavigateListener) => {
+    const listener = navigateListeners.get(cb);
+    if (listener) {
+      ipcRenderer.removeListener(IPC.NAVIGATE, listener);
+      navigateListeners.delete(cb);
+    }
   },
 
   // App info

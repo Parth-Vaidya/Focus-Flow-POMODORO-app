@@ -1,6 +1,16 @@
 import Store from 'electron-store';
 import { AppSettings } from '../../shared/types';
-import { DEFAULT_SETTINGS, MIN_DURATION_MS, MAX_DURATION_MS, MIN_INTERVAL, MAX_INTERVAL, MIN_DAILY_GOAL_MS, MAX_DAILY_GOAL_MS } from '../../shared/constants';
+import {
+  DEFAULT_SETTINGS,
+  MIN_DURATION_MS,
+  MAX_DURATION_MS,
+  MIN_INTERVAL,
+  MAX_INTERVAL,
+  MIN_TOTAL_SESSIONS,
+  MAX_TOTAL_SESSIONS,
+  MIN_DAILY_GOAL_MS,
+  MAX_DAILY_GOAL_MS,
+} from '../../shared/constants';
 
 export class PreferencesStore {
   private store: Store<AppSettings>;
@@ -52,6 +62,9 @@ export class PreferencesStore {
     if ('longBreakInterval' in result && typeof result.longBreakInterval === 'number') {
       result.longBreakInterval = Math.max(MIN_INTERVAL, Math.min(MAX_INTERVAL, Math.round(result.longBreakInterval)));
     }
+    if ('totalFocusSessions' in result && typeof result.totalFocusSessions === 'number') {
+      result.totalFocusSessions = Math.max(MIN_TOTAL_SESSIONS, Math.min(MAX_TOTAL_SESSIONS, Math.round(result.totalFocusSessions)));
+    }
     if ('dailyGoalMs' in result && typeof result.dailyGoalMs === 'number') {
       result.dailyGoalMs = Math.max(MIN_DAILY_GOAL_MS, Math.min(MAX_DAILY_GOAL_MS, result.dailyGoalMs));
     }
@@ -60,6 +73,11 @@ export class PreferencesStore {
     }
     if ('audioVolume' in result && typeof result.audioVolume === 'number') {
       result.audioVolume = Math.max(0, Math.min(1, result.audioVolume));
+    }
+    if ('audioSource' in result && typeof result.audioSource === 'string') {
+      if (!['tracks', 'brown-noise'].includes(result.audioSource)) {
+        result.audioSource = 'tracks';
+      }
     }
     if ('audioMode' in result && typeof result.audioMode === 'string') {
       if (!['single', 'sequential', 'shuffle'].includes(result.audioMode)) {

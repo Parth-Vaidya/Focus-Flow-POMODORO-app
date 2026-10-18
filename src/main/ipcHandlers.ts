@@ -9,6 +9,7 @@ import { PreferencesStore } from '../core/persistence/preferences';
 import { RecoveryStore } from '../core/persistence/recovery';
 import { AudioManager } from '../core/audio/audioManager';
 import { ThemeService, BUILT_IN_THEMES } from '../core/theme/themeService';
+import { LocalAudioService } from '../core/audio/localAudioService';
 import { AppSettings, WidgetPosition } from '../shared/types';
 import { APP_VERSION } from '../shared/constants';
 
@@ -20,11 +21,12 @@ interface SetupArgs {
   recovery: RecoveryStore;
   audioManager: AudioManager;
   themeService: ThemeService;
+  localAudioService: LocalAudioService;
   ipcMain: IpcMain;
 }
 
 export function setupIpcHandlers({
-  timerEngine, windowManager, db, prefs, recovery, audioManager, themeService, ipcMain
+  timerEngine, windowManager, db, prefs, recovery, audioManager, themeService, localAudioService, ipcMain
 }: SetupArgs): void {
 
   // ── Timer controls ──────────────────────────────────────────────────────────
@@ -77,6 +79,13 @@ export function setupIpcHandlers({
     // Handle widget-specific settings
     if ('widgetAlwaysOnTop' in updates) {
       windowManager.setWidgetAlwaysOnTop(updates.widgetAlwaysOnTop!);
+    }
+    if ('widgetVisible' in updates) {
+      if (updates.widgetVisible) {
+        windowManager.showWidget();
+      } else {
+        windowManager.hideWidget(true);
+      }
     }
     windowManager.broadcastSettings(all);
     return { ok: true };
@@ -154,7 +163,12 @@ export function setupIpcHandlers({
   });
 
   ipcMain.handle(IPC.WIDGET_HIDE, () => {
-    windowManager.hideWidget();
+    windowManager.hideWidget(false);
+    return { ok: true };
+  });
+
+  ipcMain.handle(IPC.WIDGET_SET_COMPACT, (_e, compact: boolean) => {
+    windowManager.setWidgetCompact(Boolean(compact));
     return { ok: true };
   });
 
@@ -171,13 +185,65 @@ export function setupIpcHandlers({
     return { x, y };
   });
 
-  ipcMain.handle(IPC.MAIN_FOCUS, (_e, route?: string) => {
-    if (route) windowManager.navigateMainWindow(route);
-    else windowManager.focusMainWindow();
-    return { ok: true };
+  ipcMain.on(IPC.WIDGET_DRAG_START, (_e, payload) => {
+    if (payload && typeof payload.screenX === 'number' && typeof payload.screenY === 'number') {
+      windowManager.handleDragStart(payload.screenX, payload.screenY);
+    }
+  });
+
+  ipcMain.on(IPC.WIDGET_DRAG_MOVE, (_e, payload) => {
+    if (payload && typeof payload.screenX === 'number' && typeof payload.screenY === 'number') {
+      windowManager.handleDragMove(payload.screenX, payload.screenY);
+    }
+  });
+
+  ipcMain.on(IPC.WIDGET_DRAG_END, () => {
+    windowManager.handleDragEnd();
+  });
+
+  ipcMain.handle(IPC.MAIN_FOCUS, async (_e, route?: string) => {
+    try {
+      if (route) {
+        await windowManager.navigateMainWindow(route);
+      } else {
+        await windowManager.focusMainWindow();
+      }
+      return { ok: true };
+    } catch (err) {
+      console.error('Failed to focus/navigate main window:', err);
+      return { ok: false, error: String(err) };
+    }
   });
 
   // ── Audio ────────────────────────────────────────────────────────────────────
+  ipcMain.handle(IPC.AUDIO_GET_LIBRARY, () => {
+    try {
+      return localAudioService.getTracks();
+    } catch (err) {
+      console.error('Failed to get audio library:', err);
+      return [];
+    }
+  });
+
+  ipcMain.handle(IPC.AUDIO_OPEN_FOLDER, () => {
+    try {
+      localAudioService.openAudioFolder();
+      return { ok: true };
+    } catch (err) {
+      console.error('Failed to open audio folder:', err);
+      return { ok: false, error: String(err) };
+    }
+  });
+
+  ipcMain.handle(IPC.AUDIO_REFRESH_LIBRARY, () => {
+    try {
+      return localAudioService.getTracks();
+    } catch (err) {
+      console.error('Failed to refresh audio library:', err);
+      return [];
+    }
+  });
+
   ipcMain.handle(IPC.AUDIO_BROWN_NOISE_START, (_e, volume?: number) => {
     const vol = typeof volume === 'number' ? Math.max(0, Math.min(1, volume)) : undefined;
     audioManager.startBrownNoise(vol);

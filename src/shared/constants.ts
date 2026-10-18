@@ -5,11 +5,13 @@ export const DEFAULT_SETTINGS = {
   shortBreakDurationMs: 5 * 60 * 1000,
   longBreakDurationMs: 15 * 60 * 1000,
   longBreakInterval: 4,
+  totalFocusSessions: 4,
   dailyGoalMs: 120 * 60 * 1000,
   timerStyle: 'digital' as const,
   theme: 'midnight',
   // Audio defaults
   audioEnabled: false,
+  audioSource: 'tracks' as const,
   audioVolume: 0.5,
   audioMode: 'sequential' as const,
   audioTrackId: null as string | null,
@@ -37,11 +39,15 @@ export const MIN_DURATION_MS = 1 * 60 * 1000;    // 1 minute minimum
 export const MAX_DURATION_MS = 120 * 60 * 1000;  // 120 minutes maximum
 export const MIN_INTERVAL = 1;
 export const MAX_INTERVAL = 10;
+export const MIN_TOTAL_SESSIONS = 1;
+export const MAX_TOTAL_SESSIONS = 16;
 export const MIN_DAILY_GOAL_MS = 10 * 60 * 1000;
 export const MAX_DAILY_GOAL_MS = 480 * 60 * 1000;
 
 export const WIDGET_WIDTH = 220;
 export const WIDGET_HEIGHT = 120;
+export const COMPACT_WIDGET_WIDTH = 140;
+export const COMPACT_WIDGET_HEIGHT = 36;
 export const WIDGET_MARGIN = 12;
 
 // Timer tick interval in ms

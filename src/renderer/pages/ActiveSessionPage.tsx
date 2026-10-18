@@ -1,6 +1,6 @@
 import React, { useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Pause, Play, SkipForward, RotateCcw, Square, Volume2, VolumeX, Settings } from 'lucide-react';
+import { Pause, Play, SkipForward, RotateCcw, Square, Music, Settings } from 'lucide-react';
 import { useTimerStore } from '../stores/timerStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useAudioStore } from '../stores/audioStore';
@@ -19,7 +19,7 @@ export default function ActiveSessionPage() {
   const navigate = useNavigate();
   const { timerState, pause, resume, skip, restart, stop } = useTimerStore();
   const settings = useSettingsStore(s => s.settings);
-  const { brownNoiseActive, toggleBrownNoise, stopBrownNoise } = useAudioStore();
+  const { isPlaying, toggleBgm } = useAudioStore();
 
   const sessionInfo = SESSION_LABELS[timerState.sessionType] || SESSION_LABELS.focus;
   const isRunning = timerState.status === 'running';
@@ -29,13 +29,6 @@ export default function ActiveSessionPage() {
   const goalProgress = settings.dailyGoalMs > 0
     ? Math.min(100, (timerState.activeFocusMsToday / settings.dailyGoalMs) * 100)
     : 0;
-
-  // Stop brown noise when not in focus
-  useEffect(() => {
-    if (timerState.sessionType !== 'focus' && brownNoiseActive) {
-      stopBrownNoise();
-    }
-  }, [timerState.sessionType, brownNoiseActive, stopBrownNoise]);
 
   // Keyboard shortcut: Space to pause/resume
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -53,10 +46,15 @@ export default function ActiveSessionPage() {
   }, [handleKeyDown]);
 
   const handleStop = async () => {
-    stopBrownNoise();
     await stop();
     navigate('/');
   };
+
+  useEffect(() => {
+    if (isIdle) {
+      navigate('/');
+    }
+  }, [isIdle, navigate]);
 
   if (isIdle) {
     return (
@@ -66,6 +64,8 @@ export default function ActiveSessionPage() {
       </div>
     );
   }
+
+  const totalTarget = settings.totalFocusSessions || settings.longBreakInterval || 4;
 
   return (
     <div className="flex flex-col items-center justify-between min-h-full p-8 py-10">
@@ -79,19 +79,21 @@ export default function ActiveSessionPage() {
 
         {/* Cycle indicators */}
         <div className="flex items-center gap-1.5 mt-1">
-          {Array.from({ length: settings.longBreakInterval }).map((_, i) => (
+          {Array.from({ length: totalTarget }).map((_, i) => (
             <div
               key={i}
               className={cn(
                 'w-2 h-2 rounded-full transition-colors',
                 i < timerState.cycleCount
                   ? 'bg-primary'
-                  : 'bg-border'
+                  : i === timerState.cycleCount && timerState.sessionType === 'focus'
+                    ? 'border-2 border-primary bg-primary/20 animate-pulse'
+                    : 'bg-border'
               )}
             />
           ))}
           <span className="text-xs text-muted-foreground ml-2">
-            Focus {timerState.cycleCount} of {settings.longBreakInterval}
+            Focus {timerState.sessionType === 'focus' ? Math.min(timerState.cycleCount + 1, totalTarget) : timerState.cycleCount} of {totalTarget}
           </span>
         </div>
 
@@ -150,21 +152,20 @@ export default function ActiveSessionPage() {
 
         {/* Secondary controls */}
         <div className="flex items-center gap-3">
-          {timerState.sessionType === 'focus' && (
-            <button
-              onClick={toggleBrownNoise}
-              className={cn(
-                'flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border transition-colors cursor-pointer',
-                brownNoiseActive
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-border text-muted-foreground hover:text-foreground'
-              )}
-              aria-label={brownNoiseActive ? 'Stop brown noise' : 'Start brown noise'}
-            >
-              {brownNoiseActive ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
-              Brown Noise
-            </button>
-          )}
+          <button
+            onClick={toggleBgm}
+            className={cn(
+              'flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border transition-colors cursor-pointer',
+              settings.audioEnabled
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border text-muted-foreground hover:text-foreground'
+            )}
+            aria-label={settings.audioEnabled ? 'Disable BGM' : 'Enable BGM'}
+            title={settings.audioEnabled ? `BGM: Enabled (${settings.audioSource === 'brown-noise' ? 'Brown Noise' : 'Local Tracks'})` : 'BGM: Disabled (Click to enable)'}
+          >
+            <Music className="w-3.5 h-3.5" />
+            BGM
+          </button>
 
           <button
             onClick={handleStop}

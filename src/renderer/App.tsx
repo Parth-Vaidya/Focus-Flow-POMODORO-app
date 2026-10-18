@@ -2,6 +2,8 @@ import React, { useEffect } from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import { useSettingsStore } from './stores/settingsStore';
 import { useTimerStore } from './stores/timerStore';
+import { useAudioStore } from './stores/audioStore';
+import { initAudioLifecycle } from './stores/audioLifecycle';
 import { ThemeProvider } from './components/ThemeProvider';
 import { Toaster } from './components/ui/toaster';
 import HomePage from './pages/HomePage';
@@ -14,31 +16,38 @@ import RecoveryBanner from './components/RecoveryBanner';
 
 export default function App() {
   const navigate = useNavigate();
-  const loadSettings = useSettingsStore(s => s.load);
-  const syncTimer = useTimerStore(s => s.syncFromMain);
-  const checkRecovery = useTimerStore(s => s.checkRecovery);
+  const navigateRef = React.useRef(navigate);
+  navigateRef.current = navigate;
 
   useEffect(() => {
-    // Load settings from main process
-    loadSettings();
-    // Sync initial timer state
-    syncTimer();
-    // Check for recovery data
-    checkRecovery();
+    // 1. Initial loads from main process
+    useSettingsStore.getState().load();
+    useTimerStore.getState().syncFromMain();
+    useTimerStore.getState().checkRecovery();
+    useAudioStore.getState().loadLibrary();
 
-    // Subscribe to timer state updates
-    window.focusFlow.timer.onStateUpdate((stateJson: string) => {
+    // 2. Persistent background audio timer lifecycle coordinator
+    const cleanupAudioLifecycle = initAudioLifecycle();
+
+    // 3. Subscribe to timer state updates with exact unsubscription cleanup
+    const unsubTimer = window.focusFlow.timer.onStateUpdate((stateJson: string) => {
       try {
         const state = JSON.parse(stateJson);
         useTimerStore.getState().setTimerState(state);
       } catch {}
     });
 
-    // Handle navigation from main process
-    window.focusFlow.onNavigate((route: string) => {
-      navigate(route);
+    // 4. Handle navigation from main process with exact unsubscription cleanup
+    const unsubNavigate = window.focusFlow.onNavigate((route: string) => {
+      navigateRef.current(route);
     });
-  }, [loadSettings, syncTimer, checkRecovery, navigate]);
+
+    return () => {
+      unsubTimer?.();
+      unsubNavigate?.();
+      cleanupAudioLifecycle?.();
+    };
+  }, []);
 
   return (
     <ThemeProvider>

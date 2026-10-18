@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Timer, BarChart2, Volume2, VolumeX, Zap } from 'lucide-react';
+import { Timer, BarChart2, Zap, Music } from 'lucide-react';
 import { useTimerStore } from '../stores/timerStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useAudioStore } from '../stores/audioStore';
@@ -16,7 +16,7 @@ export default function HomePage() {
 
   const { start, timerState } = useTimerStore();
   const settings = useSettingsStore(s => s.settings);
-  const { brownNoiseActive, toggleBrownNoise } = useAudioStore();
+  const { isPlaying, toggleBgm } = useAudioStore();
 
   const isActive = timerState.status === 'running' || timerState.status === 'paused';
 
@@ -98,17 +98,17 @@ export default function HomePage() {
           </Button>
 
           <button
-            onClick={toggleBrownNoise}
+            onClick={toggleBgm}
             className={cn(
               'h-12 w-12 rounded-md border flex items-center justify-center transition-colors cursor-pointer',
-              brownNoiseActive
+              settings.audioEnabled
                 ? 'border-primary bg-primary/10 text-primary'
                 : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30'
             )}
-            aria-label={brownNoiseActive ? 'Stop brown noise' : 'Start brown noise'}
-            title={brownNoiseActive ? 'Stop brown noise' : 'Start brown noise'}
+            aria-label={settings.audioEnabled ? 'BGM enabled' : 'BGM disabled'}
+            title={settings.audioEnabled ? `BGM: Enabled (${settings.audioSource === 'brown-noise' ? 'Brown Noise' : 'Local Tracks'})` : 'BGM: Disabled (Click to enable)'}
           >
-            {brownNoiseActive ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+            <Music className="w-5 h-5" />
           </button>
         </div>
 

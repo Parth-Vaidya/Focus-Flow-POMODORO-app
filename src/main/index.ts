@@ -1,5 +1,7 @@
-import { app, BrowserWindow, ipcMain, Notification, nativeTheme } from 'electron';
+import { app, BrowserWindow, ipcMain, Notification, nativeTheme, protocol, net } from 'electron';
 import path from 'path';
+import fs from 'fs';
+import { pathToFileURL } from 'url';
 import { WindowManager } from './windowManager';
 import { setupIpcHandlers } from './ipcHandlers';
 import { TimerEngine } from '../core/timer/timerEngine';
@@ -8,7 +10,22 @@ import { PreferencesStore } from '../core/persistence/preferences';
 import { RecoveryStore } from '../core/persistence/recovery';
 import { AudioManager } from '../core/audio/audioManager';
 import { ThemeService } from '../core/theme/themeService';
+import { LocalAudioService } from '../core/audio/localAudioService';
 import { APP_VERSION } from '../shared/constants';
+
+// Register local-audio scheme as privileged before app is ready
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'local-audio',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      stream: true,
+      bypassCSP: true,
+    },
+  },
+]);
 
 // Prevent multiple instances
 const gotLock = app.requestSingleInstanceLock();
@@ -24,6 +41,7 @@ let prefs: PreferencesStore;
 let recovery: RecoveryStore;
 let audioManager: AudioManager;
 let themeService: ThemeService;
+let localAudioService: LocalAudioService;
 
 app.whenReady().then(async () => {
   // Initialize stores
@@ -33,6 +51,48 @@ app.whenReady().then(async () => {
   recovery = new RecoveryStore();
   audioManager = new AudioManager();
   themeService = new ThemeService();
+  localAudioService = new LocalAudioService();
+
+  // Register local-audio protocol for streaming local audio files securely
+  protocol.handle('local-audio', (request) => {
+    try {
+      const url = new URL(request.url);
+      let rawId = url.pathname.replace(/^\/+/, '');
+      if (url.host && url.host !== 'track' && (!rawId || rawId === '')) {
+        rawId = url.host;
+      } else if (rawId.startsWith('track/')) {
+        rawId = rawId.substring('track/'.length);
+      }
+      const trackId = decodeURIComponent(rawId);
+      const tracks = localAudioService.getTracks();
+      const track = tracks.find(t => t.id === trackId);
+      if (!track) {
+        return new Response('Track not found', { status: 404 });
+      }
+
+      const audioDir = localAudioService.getAudioDirectory();
+      if (!fs.existsSync(audioDir) || !fs.existsSync(track.path)) {
+        return new Response('File not found', { status: 404 });
+      }
+
+      // Security check: resolve symlinks and assert file is inside designated audio directory
+      const realAudioDir = fs.realpathSync(audioDir);
+      const realTrackPath = fs.realpathSync(track.path);
+      const relative = path.relative(realAudioDir.toLowerCase(), realTrackPath.toLowerCase());
+      if (relative.startsWith('..') || path.isAbsolute(relative)) {
+        return new Response('Access denied', { status: 403 });
+      }
+
+      // Forward request headers and method to net.fetch for HTTP Range / media seeking support
+      return net.fetch(pathToFileURL(realTrackPath).href, {
+        headers: request.headers,
+        method: request.method,
+      });
+    } catch (err) {
+      console.error('Error handling local-audio protocol:', err);
+      return new Response('Internal error', { status: 500 });
+    }
+  });
 
   const settings = prefs.getAll();
 
@@ -44,13 +104,13 @@ app.whenReady().then(async () => {
     },
     onSessionComplete: async (record) => {
       db.insertSession(record);
-      recovery.clear();
-      // Play alert
-      if (settings.alertSoundEnabled) {
+      const currentSettings = prefs.getAll();
+      // Play alert only on natural completion
+      if (currentSettings.alertSoundEnabled && record.status === 'completed') {
         audioManager.playAlert();
       }
       // Desktop notification
-      if (settings.notificationsEnabled && Notification.isSupported()) {
+      if (currentSettings.notificationsEnabled && Notification.isSupported() && record.status === 'completed') {
         const title = record.sessionType === 'focus'
           ? '✅ Focus session complete!'
           : record.sessionType === 'short-break'
@@ -63,7 +123,11 @@ app.whenReady().then(async () => {
       }
     },
     onRecoverySave: (state) => {
-      recovery.save({ timerState: state, savedAt: Date.now(), appVersion: APP_VERSION });
+      if (state.status === 'idle') {
+        recovery.clear();
+      } else {
+        recovery.save({ timerState: state, savedAt: Date.now(), appVersion: APP_VERSION });
+      }
     },
   });
 
@@ -71,12 +135,12 @@ app.whenReady().then(async () => {
   windowManager = new WindowManager({ timerEngine, prefs });
 
   // IPC handlers: must be registered before creating windows so renderer initial calls succeed
-  setupIpcHandlers({ timerEngine, windowManager, db, prefs, recovery, audioManager, themeService, ipcMain });
+  setupIpcHandlers({ timerEngine, windowManager, db, prefs, recovery, audioManager, themeService, localAudioService, ipcMain });
 
   await windowManager.createMainWindow();
 
   if (settings.widgetVisible) {
-    await windowManager.createWidgetWindow();
+    await windowManager.createWidgetWindow(false);
   }
 
   app.on('second-instance', () => {
@@ -105,6 +169,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  windowManager?.setQuitting(true);
   const state = timerEngine?.getState();
   if (state && (state.status === 'running' || state.status === 'paused')) {
     recovery?.save({ timerState: state, savedAt: Date.now(), appVersion: APP_VERSION });

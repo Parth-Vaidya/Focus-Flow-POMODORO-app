@@ -44,6 +44,7 @@ export interface ThemeDefinition {
 }
 
 export type AudioPlaybackMode = 'single' | 'sequential' | 'shuffle';
+export type BackgroundAudioSource = 'tracks' | 'brown-noise';
 
 export interface AudioTrack {
   id: string;
@@ -95,11 +96,13 @@ export interface AppSettings {
   shortBreakDurationMs: number;
   longBreakDurationMs: number;
   longBreakInterval: number; // completed focus sessions before long break
+  totalFocusSessions: number; // total completed focus sessions to finish cycle
   dailyGoalMs: number;
   timerStyle: TimerStyle;
   theme: string;
   // Local audio settings
   audioEnabled: boolean;
+  audioSource: BackgroundAudioSource;
   audioVolume: number; // 0-1
   audioMode: AudioPlaybackMode;
   audioTrackId: string | null;
@@ -167,8 +170,12 @@ export const IPC = {
   // Widget
   WIDGET_SHOW: 'widget:show',
   WIDGET_HIDE: 'widget:hide',
+  WIDGET_SET_COMPACT: 'widget:set-compact',
   WIDGET_SET_POSITION: 'widget:set-position',
   WIDGET_GET_POSITION: 'widget:get-position',
+  WIDGET_DRAG_START: 'widget:drag-start',
+  WIDGET_DRAG_MOVE: 'widget:drag-move',
+  WIDGET_DRAG_END: 'widget:drag-end',
   MAIN_FOCUS: 'main:focus',
   NAVIGATE: 'navigate',
 
