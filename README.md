@@ -280,6 +280,8 @@ All files are stored in your operating system's standard application data direct
 
 ---
 
-## License
+## Author
 
-This project is licensed under the [MIT License](LICENSE) (or as designated in the repository).
+Created and developed by **Parth Vaidya**.
+
+- GitHub: [@Parth-Vaidya](https://github.com/Parth-Vaidya)
