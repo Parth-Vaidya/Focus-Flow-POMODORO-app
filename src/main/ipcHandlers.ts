@@ -244,21 +244,21 @@ export function setupIpcHandlers({
     }
   });
 
-  ipcMain.handle(IPC.AUDIO_BROWN_NOISE_START, (_e, volume?: number) => {
-    const vol = typeof volume === 'number' ? Math.max(0, Math.min(1, volume)) : undefined;
-    audioManager.startBrownNoise(vol);
-    return { ok: true };
-  });
-
-  ipcMain.handle(IPC.AUDIO_BROWN_NOISE_STOP, () => {
-    audioManager.stopBrownNoise();
-    return { ok: true };
-  });
-
-  ipcMain.handle(IPC.AUDIO_BROWN_NOISE_VOLUME, (_e, volume: number) => {
-    if (typeof volume !== 'number') return { ok: false };
-    audioManager.setBrownNoiseVolume(Math.max(0, Math.min(1, volume)));
-    return { ok: true };
+  ipcMain.handle(IPC.AUDIO_SOFT_WHITE_NOISE_STATUS, () => {
+    try {
+      const assetPath = localAudioService.getBundledSoftWhiteNoiseFile();
+      if (assetPath && fs.existsSync(assetPath)) {
+        return {
+          available: true,
+          path: assetPath,
+          fileName: path.basename(assetPath),
+        };
+      }
+      return { available: false };
+    } catch (err) {
+      console.warn('Failed to get soft white noise status:', err);
+      return { available: false };
+    }
   });
 
   ipcMain.handle(IPC.AUDIO_ALERT, () => {

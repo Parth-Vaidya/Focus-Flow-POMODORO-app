@@ -12,14 +12,17 @@ interface AudioState {
   volume: number;
   isManuallyPaused: boolean;
 
-  // Legacy brown noise backward compatibility
-  brownNoiseActive: boolean;
-  startBrownNoise: () => void;
-  stopBrownNoise: () => void;
-  setVolume: (v: number) => void;
-  toggleBrownNoise: () => void;
+  // Bundled Soft White Noise status
+  softWhiteNoiseAvailable: boolean | null;
+  softWhiteNoiseFileName: string | null;
+  checkSoftWhiteNoiseAsset: () => Promise<boolean>;
+  previewSoftWhiteNoise: () => Promise<boolean>;
+  playSoftWhiteNoise: () => Promise<boolean>;
 
-  // Local audio library state
+  // Source selection
+  selectAudioSource: (source: BackgroundAudioSource) => Promise<void>;
+
+  // Local audio library state (My Music)
   tracks: AudioTrack[];
   loadingLibrary: boolean;
   selectedTrackId: string | null;
@@ -30,83 +33,22 @@ interface AudioState {
   openAudioFolder: () => Promise<{ ok: boolean; error?: string }>;
   selectTrack: (trackId: string | null) => Promise<void>;
   previewTrack: (trackId: string) => Promise<void>;
-  previewBrownNoise: () => void;
   stopPreview: () => void;
-  setAudioVolume: (volume: number) => Promise<void>;
+  setAudioVolume: (volume: number) => void;
+  applyLiveVolume: (volume: number) => void;
   setAudioMode: (mode: AudioPlaybackMode) => Promise<void>;
   toggleBgm: () => Promise<void>;
 
   // Session background music methods
   playTrack: (trackId: string, explicitPosition?: number) => Promise<boolean>;
-  playBrownNoise: () => void;
   pausePlayback: () => void;
   resumePlayback: () => Promise<boolean>;
   stopPlayback: () => void;
   playNextTrack: () => Promise<boolean>;
+
+  // Legacy alias for volume
+  setVolume: (v: number) => void;
 }
-
-// Brown noise generator using Web Audio API
-class BrownNoisePlayer {
-  private ctx: AudioContext | null = null;
-  private source: AudioBufferSourceNode | null = null;
-  private gainNode: GainNode | null = null;
-  private isPlaying = false;
-
-  start(volume: number): void {
-    if (this.isPlaying) return;
-    try {
-      this.ctx = new AudioContext();
-      this.gainNode = this.ctx.createGain();
-      this.gainNode.gain.value = volume;
-      this.gainNode.connect(this.ctx.destination);
-
-      const bufferSize = this.ctx.sampleRate * 2; // 2 seconds
-      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-      const data = buffer.getChannelData(0);
-
-      // Generate brown noise
-      let lastOut = 0;
-      for (let i = 0; i < bufferSize; i++) {
-        const white = Math.random() * 2 - 1;
-        data[i] = (lastOut + 0.02 * white) / 1.02;
-        lastOut = data[i];
-        data[i] *= 3.5; // amplify
-      }
-
-      this.source = this.ctx.createBufferSource();
-      this.source.buffer = buffer;
-      this.source.loop = true;
-      this.source.connect(this.gainNode);
-      this.source.start();
-      this.isPlaying = true;
-    } catch (e) {
-      console.warn('Brown noise playback failed:', e);
-    }
-  }
-
-  stop(): void {
-    try {
-      this.source?.stop();
-      this.source?.disconnect();
-      this.gainNode?.disconnect();
-      this.ctx?.close();
-    } catch {}
-    this.source = null;
-    this.gainNode = null;
-    this.ctx = null;
-    this.isPlaying = false;
-  }
-
-  setVolume(volume: number): void {
-    if (this.gainNode) {
-      this.gainNode.gain.value = volume;
-    }
-  }
-
-  get playing(): boolean { return this.isPlaying; }
-}
-
-const noisePlayer = new BrownNoisePlayer();
 
 export const playAlertSound = (): void => {
   try {
@@ -133,7 +75,8 @@ export const playAlertSound = (): void => {
 };
 
 /**
- * Calculates the next track ID based on the playback mode (single, sequential, shuffle).
+ * Calculates the next track ID in My Music based on the playback mode (single, sequential, shuffle).
+ * Bundled Soft White Noise is never included in this pool.
  */
 export function getNextTrackId(
   currentTrackId: string | null,
@@ -158,9 +101,9 @@ export function getNextTrackId(
 
     case 'shuffle': {
       const candidates = tracks.filter(t => t.id !== currentTrackId);
-      const pool = candidates.length > 0 ? candidates : tracks;
-      const randomIndex = Math.floor(Math.random() * pool.length);
-      return pool[randomIndex].id;
+      const shufflePool = candidates.length > 0 ? candidates : tracks;
+      const randomIndex = Math.floor(Math.random() * shufflePool.length);
+      return shufflePool[randomIndex].id;
     }
 
     default:
@@ -169,20 +112,63 @@ export function getNextTrackId(
 }
 
 /**
- * Low-level HTML5 Audio Player managing playback of local audio tracks.
+ * Internal gain multiplier for Soft White Noise ambient sound.
+ * Ambient/noise assets typically sit at a lower RMS loudness than mastered music tracks.
+ * A 2.0x multiplier (+6 dB) raises perceived loudness while preserving master volume slider range.
+ * A transparent Web Audio limiter prevents any digital clipping or harsh distortion at 100% volume.
+ */
+export const SOFT_WHITE_NOISE_GAIN_MULTIPLIER = 2.0;
+
+/**
+ * Low-level HTML5 Audio Player managing playback of local audio tracks and bundled assets.
+ * Handles instant volume adjustments, playback positions, error recovery, and looping.
+ * Routes audio through a Web Audio GainNode to allow controlled amplification of Soft White Noise
+ * beyond the standard 0-1 HTML audio element limit without affecting user music files.
  */
 class LocalAudioPlayer {
   private audio: HTMLAudioElement | null = null;
+  private audioCtx: AudioContext | null = null;
+  private sourceNode: MediaElementAudioSourceNode | null = null;
+  private gainNode: GainNode | null = null;
+  private limiterNode: DynamicsCompressorNode | null = null;
   private currentTrackId: string | null = null;
   private savedPositions = new Map<string, number>();
   private playGeneration = 0;
   private onTrackEnded: (() => void) | null = null;
   private onError: ((err: unknown) => void) | null = null;
+  private isSoftWhiteNoise = false;
+  private masterVolume = 0.5;
 
   constructor() {
     if (typeof window !== 'undefined') {
       this.audio = new Audio();
       this.audio.preload = 'auto';
+      this.audio.crossOrigin = 'anonymous';
+
+      // Set up persistent Web Audio API gain routing for amplification beyond 1.0 (Soft White Noise boost)
+      try {
+        const AudioCtxClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        if (AudioCtxClass) {
+          this.audioCtx = new AudioCtxClass();
+          this.sourceNode = this.audioCtx.createMediaElementSource(this.audio);
+          this.gainNode = this.audioCtx.createGain();
+
+          // Peak limiter to cleanly prevent digital clipping and harsh distortion when amplified at 100% volume
+          this.limiterNode = this.audioCtx.createDynamicsCompressor();
+          this.limiterNode.threshold.setValueAtTime(-0.5, this.audioCtx.currentTime);
+          this.limiterNode.knee.setValueAtTime(3.0, this.audioCtx.currentTime);
+          this.limiterNode.ratio.setValueAtTime(20.0, this.audioCtx.currentTime);
+          this.limiterNode.attack.setValueAtTime(0.003, this.audioCtx.currentTime);
+          this.limiterNode.release.setValueAtTime(0.1, this.audioCtx.currentTime);
+
+          // Connect audio graph: source -> gainNode -> limiterNode -> destination
+          this.sourceNode.connect(this.gainNode);
+          this.gainNode.connect(this.limiterNode);
+          this.limiterNode.connect(this.audioCtx.destination);
+        }
+      } catch (err) {
+        console.warn('LocalAudioPlayer: Web Audio API gain routing setup failed, falling back to direct volume:', err);
+      }
 
       this.audio.addEventListener('ended', () => {
         this.onTrackEnded?.();
@@ -199,6 +185,33 @@ class LocalAudioPlayer {
         console.warn('LocalAudioPlayer error event:', err);
         this.onError?.(err);
       });
+    }
+  }
+
+  private async ensureAudioContextActive(): Promise<void> {
+    if (this.audioCtx && this.audioCtx.state === 'suspended') {
+      try {
+        await this.audioCtx.resume();
+      } catch (e) {
+        console.warn('Failed to resume AudioContext:', e);
+      }
+    }
+  }
+
+  private applyGain(): void {
+    const multiplier = this.isSoftWhiteNoise ? SOFT_WHITE_NOISE_GAIN_MULTIPLIER : 1.0;
+    const targetGain = Math.max(0, this.masterVolume * multiplier);
+
+    if (this.gainNode && this.audioCtx) {
+      // Keep audio element at unity volume (1.0) so gainNode is the sole authoritative volume stage
+      if (this.audio && this.audio.volume !== 1.0) {
+        this.audio.volume = 1.0;
+      }
+      this.gainNode.gain.cancelScheduledValues(this.audioCtx.currentTime);
+      this.gainNode.gain.setValueAtTime(targetGain, this.audioCtx.currentTime);
+    } else if (this.audio) {
+      // Fallback: clamp to 0-1 for standard HTML audio element volume
+      this.audio.volume = Math.max(0, Math.min(1, targetGain));
     }
   }
 
@@ -288,7 +301,12 @@ class LocalAudioPlayer {
     if (!this.audio) return false;
     const generation = ++this.playGeneration;
     try {
-      this.audio.volume = Math.max(0, Math.min(1, volume));
+      this.masterVolume = Math.max(0, Math.min(1, volume));
+      this.isSoftWhiteNoise = (trackId === 'soft-white-noise');
+      this.applyGain();
+
+      await this.ensureAudioContextActive();
+
       const targetUrl = `local-audio://track/${encodeURIComponent(trackId)}`;
       const isSameTrack = this.currentTrackId === trackId && this.audio.src === targetUrl;
 
@@ -341,6 +359,9 @@ class LocalAudioPlayer {
     if (!this.audio || !this.currentTrackId) return false;
     const generation = ++this.playGeneration;
     try {
+      await this.ensureAudioContextActive();
+      this.applyGain();
+
       const savedPos = this.savedPositions.get(this.currentTrackId) ?? 0;
       if (savedPos > 0 && Math.abs(this.audio.currentTime - savedPos) > 1.0) {
         await this.seekToPosition(savedPos);
@@ -371,9 +392,8 @@ class LocalAudioPlayer {
   }
 
   setVolume(volume: number): void {
-    if (this.audio) {
-      this.audio.volume = Math.max(0, Math.min(1, volume));
-    }
+    this.masterVolume = Math.max(0, Math.min(1, volume));
+    this.applyGain();
   }
 
   getCurrentTrackId(): string | null {
@@ -387,6 +407,8 @@ class LocalAudioPlayer {
 
 const localPlayer = new LocalAudioPlayer();
 
+let volumePersistenceTimer: NodeJS.Timeout | null = null;
+
 export const useAudioStore = create<AudioState>()((set, get) => ({
   // Unified active source & playback status
   activeSource: null,
@@ -397,39 +419,52 @@ export const useAudioStore = create<AudioState>()((set, get) => ({
   volume: 0.5,
   isManuallyPaused: false,
 
-  // Brown noise legacy compatibility
-  brownNoiseActive: false,
+  // Bundled Soft White Noise status
+  softWhiteNoiseAvailable: null,
+  softWhiteNoiseFileName: null,
 
-  startBrownNoise: () => {
-    get().playBrownNoise();
+  checkSoftWhiteNoiseAsset: async () => {
+    try {
+      if (window.focusFlow?.audio?.getSoftWhiteNoiseStatus) {
+        const res = await window.focusFlow.audio.getSoftWhiteNoiseStatus();
+        set({
+          softWhiteNoiseAvailable: res.available,
+          softWhiteNoiseFileName: res.fileName || null,
+        });
+        return res.available;
+      }
+    } catch (err) {
+      console.warn('Failed to check soft white noise status:', err);
+    }
+    set({ softWhiteNoiseAvailable: false, softWhiteNoiseFileName: null });
+    return false;
   },
 
-  stopBrownNoise: () => {
-    if (get().activeSource === 'brown-noise') {
-      get().stopPlayback();
-    } else {
-      noisePlayer.stop();
-      set({ brownNoiseActive: false });
+  selectAudioSource: async (source: BackgroundAudioSource) => {
+    const current = get();
+    if (current.isPlayingPreview) {
+      current.stopPreview();
     }
+    if (current.isPlaying) {
+      current.stopPlayback();
+    }
+    await useSettingsStore.getState().update({ audioSource: source });
   },
 
   setVolume: (v) => {
     get().setAudioVolume(v);
   },
 
-  toggleBrownNoise: () => {
-    const { activeSource, isPlaying } = get();
-    if (activeSource === 'brown-noise' && isPlaying) {
-      get().stopPlayback();
-    } else {
-      get().playBrownNoise();
-    }
-  },
+  // Local audio library state (My Music)
+  tracks: [],
+  loadingLibrary: false,
+  selectedTrackId: null,
 
   // Library management
   loadLibrary: async () => {
     try {
       set({ loadingLibrary: true });
+      get().checkSoftWhiteNoiseAsset();
       const tracks = await window.focusFlow.audio.getLibrary();
       const settings = useSettingsStore.getState().settings;
       const activeTrackId = settings.audioTrackId;
@@ -447,6 +482,7 @@ export const useAudioStore = create<AudioState>()((set, get) => ({
   refreshLibrary: async () => {
     try {
       set({ loadingLibrary: true });
+      get().checkSoftWhiteNoiseAsset();
       const tracks = await window.focusFlow.audio.refreshLibrary();
       const settings = useSettingsStore.getState().settings;
       set({
@@ -484,6 +520,43 @@ export const useAudioStore = create<AudioState>()((set, get) => ({
   },
 
   // Preview management
+  previewSoftWhiteNoise: async () => {
+    const { previewingTrackId, isPlayingPreview } = get();
+    if (previewingTrackId === 'soft-white-noise' && isPlayingPreview) {
+      get().stopPreview();
+      return false;
+    }
+
+    const available = await get().checkSoftWhiteNoiseAsset();
+    if (!available) {
+      set({
+        previewingTrackId: null,
+        isPlayingPreview: false,
+      });
+      return false;
+    }
+
+    localPlayer.pause();
+
+    set({
+      previewingTrackId: 'soft-white-noise',
+      isPlayingPreview: true,
+      isPlaying: false,
+    });
+
+    const settings = useSettingsStore.getState().settings;
+    const vol = typeof settings.audioVolume === 'number' ? settings.audioVolume : 0.5;
+    const ok = await localPlayer.loadAndPlay('soft-white-noise', vol, 0);
+    if (!ok) {
+      set({
+        previewingTrackId: null,
+        isPlayingPreview: false,
+      });
+      return false;
+    }
+    return true;
+  },
+
   previewTrack: async (trackId: string) => {
     const { previewingTrackId, isPlayingPreview } = get();
     if (previewingTrackId === trackId && isPlayingPreview) {
@@ -491,15 +564,12 @@ export const useAudioStore = create<AudioState>()((set, get) => ({
       return;
     }
 
-    // Stop brown noise and pause active playback without wiping session track
-    noisePlayer.stop();
     localPlayer.pause();
 
     set({
       previewingTrackId: trackId,
       isPlayingPreview: true,
       isPlaying: false,
-      brownNoiseActive: false,
     });
 
     const settings = useSettingsStore.getState().settings;
@@ -513,45 +583,55 @@ export const useAudioStore = create<AudioState>()((set, get) => ({
     }
   },
 
-  previewBrownNoise: () => {
-    const { previewingTrackId, isPlayingPreview } = get();
-    if (previewingTrackId === 'brown-noise' && isPlayingPreview) {
-      get().stopPreview();
-      return;
-    }
-
-    localPlayer.pause();
-    noisePlayer.stop();
-
-    set({
-      previewingTrackId: 'brown-noise',
-      isPlayingPreview: true,
-      isPlaying: false,
-      brownNoiseActive: true,
-    });
-
-    const settings = useSettingsStore.getState().settings;
-    const vol = typeof settings.audioVolume === 'number' ? settings.audioVolume : 0.5;
-    noisePlayer.start(vol);
-  },
-
   stopPreview: () => {
     if (!get().isPlayingPreview) return;
     localPlayer.pause();
-    noisePlayer.stop();
     set({
       previewingTrackId: null,
       isPlayingPreview: false,
-      brownNoiseActive: false,
     });
   },
 
-  setAudioVolume: async (vol: number) => {
+  // Authoritative single volume-update paths
+  applyLiveVolume: (vol: number) => {
     const clamped = Math.max(0, Math.min(1, vol));
     localPlayer.setVolume(clamped);
-    noisePlayer.setVolume(clamped);
     set({ volume: clamped });
-    await useSettingsStore.getState().update({ audioVolume: clamped, brownNoiseVolume: clamped });
+  },
+
+  setAudioVolume: (vol: number) => {
+    const clamped = Math.max(0, Math.min(1, vol));
+
+    // 1. Immediately update audio output volume without recreating nodes or restarting audio
+    localPlayer.setVolume(clamped);
+
+    // 2. Immediately update in-memory store volume
+    set({ volume: clamped });
+
+    // 3. Immediately update settingsStore in-memory so slider and UI percentages update smoothly
+    const settingsState = useSettingsStore.getState();
+    if (settingsState.settings.audioVolume !== clamped) {
+      useSettingsStore.setState({
+        settings: {
+          ...settingsState.settings,
+          audioVolume: clamped,
+        },
+      });
+    }
+
+    // 4. Debounce disk persistence and IPC updates to prevent competing out-of-order writes and UI lag
+    if (volumePersistenceTimer) {
+      clearTimeout(volumePersistenceTimer);
+    }
+    volumePersistenceTimer = setTimeout(async () => {
+      try {
+        await window.focusFlow.settings.set({
+          audioVolume: clamped,
+        });
+      } catch (err) {
+        console.warn('Failed to persist audio volume:', err);
+      }
+    }, 250);
   },
 
   setAudioMode: async (mode: AudioPlaybackMode) => {
@@ -573,12 +653,37 @@ export const useAudioStore = create<AudioState>()((set, get) => ({
   },
 
   // Session background playback methods
+  playSoftWhiteNoise: async () => {
+    if (get().isPlayingPreview) {
+      get().stopPreview();
+    }
+    localPlayer.stop();
+
+    const available = await get().checkSoftWhiteNoiseAsset();
+    if (!available) {
+      set({
+        isPlaying: false,
+        activeSource: null,
+      });
+      return false;
+    }
+
+    const settings = useSettingsStore.getState().settings;
+    const vol = typeof settings.audioVolume === 'number' ? settings.audioVolume : 0.5;
+    const ok = await localPlayer.loadAndPlay('soft-white-noise', vol);
+    set({
+      isPlaying: ok,
+      activeSource: ok ? 'white-noise' : null,
+      currentPlaybackTrackId: ok ? 'soft-white-noise' : get().currentPlaybackTrackId,
+      isManuallyPaused: false,
+    });
+    return ok;
+  },
+
   playTrack: async (trackId: string, explicitPosition?: number) => {
     if (get().isPlayingPreview) {
       get().stopPreview();
     }
-    // Stop brown noise to prevent overlapping playback
-    noisePlayer.stop();
 
     const settings = useSettingsStore.getState().settings;
     const vol = typeof settings.audioVolume === 'number' ? settings.audioVolume : 0.5;
@@ -587,56 +692,46 @@ export const useAudioStore = create<AudioState>()((set, get) => ({
       isPlaying: ok,
       activeSource: ok ? 'tracks' : null,
       currentPlaybackTrackId: ok ? trackId : get().currentPlaybackTrackId,
-      brownNoiseActive: false,
       isManuallyPaused: false,
     });
     return ok;
   },
 
-  playBrownNoise: () => {
-    if (get().isPlayingPreview) {
-      get().stopPreview();
-    }
-    // Stop local tracks to prevent overlapping playback
-    localPlayer.stop();
-
-    const settings = useSettingsStore.getState().settings;
-    const vol = typeof settings.audioVolume === 'number' ? settings.audioVolume : 0.5;
-    noisePlayer.start(vol);
-    set({
-      isPlaying: true,
-      activeSource: 'brown-noise',
-      brownNoiseActive: true,
-      isManuallyPaused: false,
-    });
-  },
-
   pausePlayback: () => {
-    const { activeSource } = get();
-    if (activeSource === 'tracks') {
-      localPlayer.pause();
-    } else if (activeSource === 'brown-noise') {
-      noisePlayer.stop();
-    }
-    set({ isPlaying: false, brownNoiseActive: false });
+    localPlayer.pause();
+    set({
+      isPlaying: false,
+    });
   },
 
   resumePlayback: async () => {
     const { activeSource, currentPlaybackTrackId, tracks } = get();
     const settings = useSettingsStore.getState().settings;
     const vol = typeof settings.audioVolume === 'number' ? settings.audioVolume : 0.5;
+    const source = settings.audioSource || 'white-noise';
 
-    if (activeSource === 'brown-noise') {
-      localPlayer.stop();
-      noisePlayer.start(vol);
-      set({ isPlaying: true, brownNoiseActive: true, isManuallyPaused: false });
-      return true;
-    } else {
-      noisePlayer.stop();
+    if (source === 'white-noise' || activeSource === 'white-noise') {
       let ok = await localPlayer.resume();
       if (!ok) {
-        const targetId = currentPlaybackTrackId || localPlayer.getCurrentTrackId() || settings.audioTrackId || (tracks[0]?.id ?? null);
-        if (targetId && tracks.some(t => t.id === targetId)) {
+        ok = await get().playSoftWhiteNoise();
+      } else {
+        set({
+          isPlaying: true,
+          activeSource: 'white-noise',
+          currentPlaybackTrackId: 'soft-white-noise',
+          isManuallyPaused: false,
+        });
+      }
+      return ok;
+    } else {
+      let ok = await localPlayer.resume();
+      if (!ok) {
+        const targetId =
+          currentPlaybackTrackId ||
+          localPlayer.getCurrentTrackId() ||
+          settings.audioTrackId ||
+          (tracks[0]?.id ?? null);
+        if (targetId && tracks.some((t) => t.id === targetId)) {
           ok = await localPlayer.loadAndPlay(targetId, vol);
         }
       }
@@ -644,7 +739,6 @@ export const useAudioStore = create<AudioState>()((set, get) => ({
       set({
         isPlaying: ok,
         activeSource: ok ? 'tracks' : null,
-        brownNoiseActive: false,
         isManuallyPaused: false,
         currentPlaybackTrackId: ok ? activeId : currentPlaybackTrackId,
       });
@@ -654,12 +748,10 @@ export const useAudioStore = create<AudioState>()((set, get) => ({
 
   stopPlayback: () => {
     localPlayer.stop();
-    noisePlayer.stop();
     set({
       isPlaying: false,
       isPlayingPreview: false,
       previewingTrackId: null,
-      brownNoiseActive: false,
     });
   },
 
@@ -680,8 +772,15 @@ export const useAudioStore = create<AudioState>()((set, get) => ({
 localPlayer.setEndedCallback(() => {
   const state = useAudioStore.getState();
 
-  // If preview was playing, simply stop preview
+  // If preview was playing, handle preview loop or end
   if (state.isPlayingPreview) {
+    if (state.previewingTrackId === 'soft-white-noise') {
+      // Loop soft white noise preview
+      const settings = useSettingsStore.getState().settings;
+      const vol = typeof settings.audioVolume === 'number' ? settings.audioVolume : 0.5;
+      localPlayer.loadAndPlay('soft-white-noise', vol, 0);
+      return;
+    }
     useAudioStore.setState({
       isPlayingPreview: false,
       previewingTrackId: null,
@@ -698,10 +797,22 @@ localPlayer.setEndedCallback(() => {
   // If session music is playing, handle playback mode
   if (state.isPlaying) {
     const settings = useSettingsStore.getState().settings;
-    const mode = settings.audioMode || 'sequential';
+    const currentSource = settings.audioSource || 'white-noise';
 
+    // If source is Soft White Noise, loop it continuously
+    if (currentSource === 'white-noise' || current === 'soft-white-noise') {
+      const vol = typeof settings.audioVolume === 'number' ? settings.audioVolume : 0.5;
+      localPlayer.loadAndPlay('soft-white-noise', vol, 0).then(ok => {
+        if (!ok) {
+          useAudioStore.setState({ isPlaying: false });
+        }
+      });
+      return;
+    }
+
+    // Otherwise, source is "My Music" ('tracks')
+    const mode = settings.audioMode || 'sequential';
     if (mode === 'single') {
-      // Replay the single track from start if it still exists in the library
       const trackExists = current && state.tracks.some(t => t.id === current);
       const trackToPlay = trackExists ? current : (state.tracks[0]?.id || null);
       if (trackToPlay) {
@@ -715,7 +826,7 @@ localPlayer.setEndedCallback(() => {
         useAudioStore.setState({ isPlaying: false });
       }
     } else {
-      // Sequential or shuffle: play next
+      // Sequential or shuffle in "My Music"
       useAudioStore.getState().playNextTrack();
     }
   }

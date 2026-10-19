@@ -11,7 +11,7 @@ export const DEFAULT_SETTINGS = {
   theme: 'midnight',
   // Audio defaults
   audioEnabled: false,
-  audioSource: 'tracks' as const,
+  audioSource: 'white-noise' as const,
   audioVolume: 0.5,
   audioMode: 'sequential' as const,
   audioTrackId: null as string | null,
@@ -26,6 +26,9 @@ export const DEFAULT_SETTINGS = {
   widgetDockEdge: 'right' as const,
   // History defaults
   historyItemsPerPage: 25,
+  whiteNoiseVolume: 0.4,
+  softWhiteNoiseVolume: 0.4,
+  showWhiteNoise: false,
   // Legacy compatibility
   showBrownNoise: false,
   brownNoiseVolume: 0.4,

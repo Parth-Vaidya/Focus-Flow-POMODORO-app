@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useThemeStore } from '../stores/themeStore';
 import { Switch } from '../components/ui/switch';
@@ -84,12 +85,15 @@ export default function SettingsPage() {
     isPlayingPreview,
     previewingTrackId,
     isPlaying,
+    softWhiteNoiseAvailable,
+    softWhiteNoiseFileName,
     loadLibrary,
     refreshLibrary,
     openAudioFolder,
     selectTrack,
     previewTrack,
-    previewBrownNoise,
+    previewSoftWhiteNoise,
+    selectAudioSource,
     stopPreview,
     setAudioVolume,
   } = useAudioStore();
@@ -98,6 +102,33 @@ export default function SettingsPage() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [refreshingThemes, setRefreshingThemes] = useState(false);
   const [refreshingAudio, setRefreshingAudio] = useState(false);
+
+  const location = useLocation();
+
+  useEffect(() => {
+    // Visiting settings marks first-launch discovery hint as completed
+    try {
+      localStorage.setItem('focusflow_audio_discovery_dismissed', 'true');
+    } catch {}
+
+    const isAudioTarget =
+      location.hash === '#audio' ||
+      location.hash === '#audio-settings' ||
+      location.hash === '#audio-bgm' ||
+      location.search.includes('section=audio');
+
+    if (isAudioTarget) {
+      const scrollTimer = setTimeout(() => {
+        const el = document.getElementById('audio-settings');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          el.classList.add('ring-2', 'ring-primary', 'transition-all');
+          setTimeout(() => el.classList.remove('ring-2', 'ring-primary'), 2000);
+        }
+      }, 100);
+      return () => clearTimeout(scrollTimer);
+    }
+  }, [location.hash, location.search]);
 
   useEffect(() => {
     loadThemes();
@@ -188,8 +219,16 @@ export default function SettingsPage() {
   const isUnknownTrack = Boolean(settings.audioTrackId && !selectedTrack);
   const previewingTrack = tracks.find(t => t.id === previewingTrackId);
 
-  const isBrownNoisePreviewing = isPlayingPreview && previewingTrackId === 'brown-noise';
-  const isTrackPreviewing = isPlayingPreview && previewingTrackId !== 'brown-noise';
+  const isNoisePreviewing = isPlayingPreview && previewingTrackId === 'soft-white-noise';
+  const isTrackPreviewing = isPlayingPreview && previewingTrackId !== 'soft-white-noise';
+
+  const handleToggleNoisePreview = () => {
+    if (isNoisePreviewing) {
+      stopPreview();
+    } else {
+      previewSoftWhiteNoise();
+    }
+  };
 
   const handleTogglePreview = () => {
     if (isTrackPreviewing) {
@@ -199,14 +238,6 @@ export default function SettingsPage() {
       if (trackIdToPreview) {
         previewTrack(trackIdToPreview);
       }
-    }
-  };
-
-  const handleToggleBrownNoisePreview = () => {
-    if (isBrownNoisePreviewing) {
-      stopPreview();
-    } else {
-      previewBrownNoise();
     }
   };
 
@@ -381,9 +412,9 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      {/* Audio & Notifications */}
-      <section className="mb-6">
-        <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Audio & Notifications</h2>
+      {/* Audio & BGM */}
+      <section id="audio-settings" className="mb-6 rounded-xl transition-all duration-300">
+        <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Audio & BGM</h2>
         <div className="bg-card rounded-xl border border-border px-4">
           {/* Background Audio Toggle */}
           <SettingRow
@@ -403,56 +434,86 @@ export default function SettingsPage() {
           {/* Sound Source Selection */}
           <SettingRow
             label="Sound Source"
-            description="Select which background audio system to play during focus sessions"
+            description="Choose between the bundled ambient Soft White Noise or your own music library"
           >
             <Select
-              value={settings.audioSource || 'tracks'}
-              onValueChange={v => update({ audioSource: v as BackgroundAudioSource })}
+              value={settings.audioSource || 'white-noise'}
+              onValueChange={v => selectAudioSource(v as BackgroundAudioSource)}
             >
               <SelectTrigger className="w-52">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="tracks">Local Audio Tracks</SelectItem>
-                <SelectItem value="brown-noise">Built-in Brown Noise</SelectItem>
+                <SelectItem value="white-noise">Soft White Noise</SelectItem>
+                <SelectItem value="tracks">My Music</SelectItem>
               </SelectContent>
             </Select>
           </SettingRow>
 
-          {/* If Brown Noise selected */}
-          {settings.audioSource === 'brown-noise' ? (
+          {/* Soft White Noise Source Settings */}
+          {(settings.audioSource || 'white-noise') === 'white-noise' ? (
             <>
               <Separator />
               <SettingRow
-                label="Brown Noise Sound"
-                description="Procedurally generated continuous brown noise with gentle filtering to mask distractions"
+                label="Soft White Noise"
+                description="Packaged 56 MB high-fidelity ambient sound for distraction-free focus"
               >
-                <Button
-                  variant={isBrownNoisePreviewing ? "secondary" : "outline"}
-                  size="sm"
-                  onClick={handleToggleBrownNoisePreview}
-                  className="flex items-center gap-1.5 shrink-0"
-                  title={isBrownNoisePreviewing ? "Stop brown noise preview" : "Preview brown noise"}
-                >
-                  {isBrownNoisePreviewing ? (
-                    <>
-                      <Square className="w-3.5 h-3.5 fill-current text-primary" />
-                      <span className="text-xs">Stop</span>
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-3.5 h-3.5 fill-current" />
-                      <span className="text-xs">Preview Noise</span>
-                    </>
-                  )}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant={isNoisePreviewing ? "secondary" : "outline"}
+                    size="sm"
+                    onClick={handleToggleNoisePreview}
+                    disabled={softWhiteNoiseAvailable === false}
+                    className="flex items-center gap-1.5 shrink-0"
+                    title={
+                      softWhiteNoiseAvailable === false
+                        ? "Audio asset missing. Please provide soft-white-noise.mp3 in application resources."
+                        : isNoisePreviewing
+                        ? "Stop soft white noise preview"
+                        : "Preview soft white noise"
+                    }
+                  >
+                    {isNoisePreviewing ? (
+                      <>
+                        <Square className="w-3.5 h-3.5 fill-current text-primary" />
+                        <span className="text-xs">Stop</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span className="text-xs">Preview Noise</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
               </SettingRow>
 
-              {isBrownNoisePreviewing && (
+              {softWhiteNoiseAvailable === false && (
+                <div className="mx-0 my-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-900 dark:text-amber-200">
+                  <p className="font-semibold mb-1">Soft White Noise audio asset missing</p>
+                  <p className="text-muted-foreground leading-relaxed">
+                    The bundled 56 MB file was not found in application resources. Please place <code>soft-white-noise.mp3</code> in the project's <code>public/audio/</code> or <code>resources/audio/</code> folder.
+                  </p>
+                </div>
+              )}
+
+              {softWhiteNoiseAvailable === true && (
+                <div className="mx-0 my-2 px-3 py-2 rounded-lg bg-muted/20 border border-border/40 text-xs text-muted-foreground flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    Bundled audio asset ready: <strong>{softWhiteNoiseFileName || 'soft-white-noise.mp3'}</strong>
+                  </span>
+                  <span className="text-[11px] text-muted-foreground/70">
+                    Continuous Loop
+                  </span>
+                </div>
+              )}
+
+              {isNoisePreviewing && (
                 <div className="mx-0 my-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/20 text-xs text-primary flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Music className="w-3.5 h-3.5 animate-pulse shrink-0" />
-                    <span>Previewing: <strong>Built-in Brown Noise</strong></span>
+                    <span>Previewing: <strong>Soft White Noise</strong> (Looping)</span>
                   </div>
                   <Button
                     variant="ghost"
@@ -467,11 +528,11 @@ export default function SettingsPage() {
             </>
           ) : (
             <>
-              {/* Local Tracks Source Settings */}
+              {/* My Music Source Settings */}
               <Separator />
               <SettingRow
-                label="Audio Library"
-                description="Manage audio files stored in your local FocusFlow audio folder"
+                label="Music Library"
+                description="Manage audio files stored in your local FocusFlow music folder"
               >
                 <div className="flex items-center gap-2">
                   <Button
@@ -481,7 +542,7 @@ export default function SettingsPage() {
                     className="flex items-center gap-1.5"
                   >
                     <FolderOpen className="w-3.5 h-3.5" />
-                    <span>Open Audio Folder</span>
+                    <span>Open Music Folder</span>
                   </Button>
                   <Button
                     variant="outline"
@@ -499,13 +560,13 @@ export default function SettingsPage() {
               {/* Library State Message */}
               {loadingLibrary ? (
                 <div className="mx-0 my-2 px-3 py-2 rounded-lg bg-muted/20 border border-border/40 text-xs text-muted-foreground">
-                  Scanning local audio library...
+                  Scanning local music library...
                 </div>
               ) : !hasTracks ? (
                 <div className="mx-0 my-2 p-3 rounded-lg bg-muted/40 border border-border/60 text-xs text-muted-foreground">
-                  <p className="font-medium text-foreground/90 mb-1">No audio files found</p>
+                  <p className="font-medium text-foreground/90 mb-1">No music files found</p>
                   <p>
-                    Add supported audio files (<code>.mp3</code>, <code>.wav</code>, <code>.ogg</code>, <code>.flac</code>, <code>.m4a</code>, <code>.aac</code>) into your audio folder. Click <strong>Open Audio Folder</strong> to copy your music files, then click <strong>Refresh Library</strong>.
+                    Add supported audio files (<code>.mp3</code>, <code>.wav</code>, <code>.ogg</code>, <code>.flac</code>, <code>.m4a</code>, <code>.aac</code>) into your music folder. Click <strong>Open Music Folder</strong> to copy your music files, then click <strong>Refresh Library</strong>.
                   </p>
                 </div>
               ) : (
@@ -630,7 +691,7 @@ export default function SettingsPage() {
             <div className="mx-0 my-2 px-3 py-1.5 rounded-lg bg-secondary/50 border border-border/40 text-xs text-muted-foreground flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                Session background audio is currently active ({settings.audioSource === 'brown-noise' ? 'Brown Noise' : 'Local Track'})
+                Session background audio is currently active ({settings.audioSource === 'tracks' ? (selectedTrack ? selectedTrack.name : 'My Music') : 'Soft White Noise'})
               </span>
             </div>
           )}
@@ -640,14 +701,13 @@ export default function SettingsPage() {
           {/* Background Audio Volume */}
           <SettingRow
             label="Background Audio Volume"
-            description="Set default volume level for background music and noise"
+            description="Set default volume level for background audio"
           >
             <div className="flex items-center gap-3 w-48">
               <Slider
                 min={0} max={1} step={0.05}
                 value={[settings.audioVolume ?? 0.5]}
                 onValueChange={([v]) => {
-                  update({ audioVolume: v, brownNoiseVolume: v });
                   setAudioVolume(v);
                 }}
                 className="flex-1"

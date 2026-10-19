@@ -19,7 +19,8 @@ export default function ActiveSessionPage() {
   const navigate = useNavigate();
   const { timerState, pause, resume, skip, restart, stop } = useTimerStore();
   const settings = useSettingsStore(s => s.settings);
-  const { isPlaying, toggleBgm } = useAudioStore();
+  const { isPlaying, toggleBgm, tracks } = useAudioStore();
+  const currentTrack = tracks.find(t => t.id === settings.audioTrackId);
 
   const sessionInfo = SESSION_LABELS[timerState.sessionType] || SESSION_LABELS.focus;
   const isRunning = timerState.status === 'running';
@@ -161,7 +162,13 @@ export default function ActiveSessionPage() {
                 : 'border-border text-muted-foreground hover:text-foreground'
             )}
             aria-label={settings.audioEnabled ? 'Disable BGM' : 'Enable BGM'}
-            title={settings.audioEnabled ? `BGM: Enabled (${settings.audioSource === 'brown-noise' ? 'Brown Noise' : 'Local Tracks'})` : 'BGM: Disabled (Click to enable)'}
+            title={
+              settings.audioEnabled
+                ? (settings.audioSource !== 'tracks'
+                    ? 'BGM: Enabled (Soft White Noise)'
+                    : (currentTrack ? `BGM: Enabled (${currentTrack.name})` : 'BGM: Enabled (My Music)'))
+                : 'BGM: Disabled (Click to enable)'
+            }
           >
             <Music className="w-3.5 h-3.5" />
             BGM

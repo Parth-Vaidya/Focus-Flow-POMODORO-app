@@ -44,7 +44,7 @@ export interface ThemeDefinition {
 }
 
 export type AudioPlaybackMode = 'single' | 'sequential' | 'shuffle';
-export type BackgroundAudioSource = 'tracks' | 'brown-noise';
+export type BackgroundAudioSource = 'tracks' | 'white-noise' | 'soft-white-noise';
 
 export interface AudioTrack {
   id: string;
@@ -52,6 +52,7 @@ export interface AudioTrack {
   fileName: string;
   path: string;
   sizeBytes: number;
+  isFocusNoise?: boolean;
 }
 
 export interface TimerState {
@@ -117,6 +118,9 @@ export interface AppSettings {
   widgetDockEdge: 'left' | 'right' | 'top' | 'bottom';
   // History preferences
   historyItemsPerPage: number;
+  whiteNoiseVolume?: number;
+  softWhiteNoiseVolume?: number;
+  showWhiteNoise?: boolean;
   // Backward compatibility legacy fields
   showBrownNoise?: boolean;
   brownNoiseVolume?: number;
@@ -189,9 +193,7 @@ export const IPC = {
   AUDIO_GET_LIBRARY: 'audio:get-library',
   AUDIO_OPEN_FOLDER: 'audio:open-folder',
   AUDIO_REFRESH_LIBRARY: 'audio:refresh-library',
-  AUDIO_BROWN_NOISE_START: 'audio:brown-noise-start',
-  AUDIO_BROWN_NOISE_STOP: 'audio:brown-noise-stop',
-  AUDIO_BROWN_NOISE_VOLUME: 'audio:brown-noise-volume',
+  AUDIO_SOFT_WHITE_NOISE_STATUS: 'audio:soft-white-noise-status',
   AUDIO_ALERT: 'audio:alert',
 
   // Notifications

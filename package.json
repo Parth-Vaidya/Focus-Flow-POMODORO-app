@@ -73,6 +73,13 @@
       "dist/**/*",
       "dist-electron/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "public/audio",
+        "to": "audio",
+        "filter": ["*.mp3", "*.wav", "*.ogg", "*.flac", "*.m4a", "*.aac"]
+      }
+    ],
     "win": {
       "target": "nsis",
       "icon": "assets/icon.ico"

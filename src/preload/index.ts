@@ -85,9 +85,8 @@ const focusFlowAPI = {
     getLibrary: (): Promise<AudioTrack[]> => ipcRenderer.invoke(IPC.AUDIO_GET_LIBRARY),
     openFolder: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke(IPC.AUDIO_OPEN_FOLDER),
     refreshLibrary: (): Promise<AudioTrack[]> => ipcRenderer.invoke(IPC.AUDIO_REFRESH_LIBRARY),
-    startBrownNoise: (volume?: number) => ipcRenderer.invoke(IPC.AUDIO_BROWN_NOISE_START, volume),
-    stopBrownNoise: () => ipcRenderer.invoke(IPC.AUDIO_BROWN_NOISE_STOP),
-    setBrownNoiseVolume: (volume: number) => ipcRenderer.invoke(IPC.AUDIO_BROWN_NOISE_VOLUME, volume),
+    getSoftWhiteNoiseStatus: (): Promise<{ available: boolean; path?: string; fileName?: string }> =>
+      ipcRenderer.invoke(IPC.AUDIO_SOFT_WHITE_NOISE_STATUS),
     playAlert: () => ipcRenderer.invoke(IPC.AUDIO_ALERT),
   },
 

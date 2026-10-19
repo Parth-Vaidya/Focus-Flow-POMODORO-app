@@ -23,7 +23,11 @@ export class PreferencesStore {
   }
 
   get<K extends keyof AppSettings>(key: K): AppSettings[K] {
-    return this.store.get(key);
+    const val = this.store.get(key);
+    if (val === undefined && key in DEFAULT_SETTINGS) {
+      return DEFAULT_SETTINGS[key as keyof typeof DEFAULT_SETTINGS] as AppSettings[K];
+    }
+    return val;
   }
 
   set<K extends keyof AppSettings>(key: K, value: AppSettings[K]): void {
@@ -31,7 +35,12 @@ export class PreferencesStore {
   }
 
   getAll(): AppSettings {
-    return this.store.store as AppSettings;
+    const raw = this.store.store as AppSettings;
+    const merged = { ...DEFAULT_SETTINGS, ...raw };
+    if (merged && (merged.audioSource === 'soft-white-noise' || (merged.audioSource as string) === 'brown-noise')) {
+      return { ...merged, audioSource: 'white-noise' };
+    }
+    return merged;
   }
 
   setMany(updates: Partial<AppSettings>): void {
@@ -68,15 +77,24 @@ export class PreferencesStore {
     if ('dailyGoalMs' in result && typeof result.dailyGoalMs === 'number') {
       result.dailyGoalMs = Math.max(MIN_DAILY_GOAL_MS, Math.min(MAX_DAILY_GOAL_MS, result.dailyGoalMs));
     }
+    if ('whiteNoiseVolume' in result && typeof result.whiteNoiseVolume === 'number') {
+      result.whiteNoiseVolume = Math.max(0, Math.min(1, result.whiteNoiseVolume));
+    }
     if ('brownNoiseVolume' in result && typeof result.brownNoiseVolume === 'number') {
       result.brownNoiseVolume = Math.max(0, Math.min(1, result.brownNoiseVolume));
+    }
+    if ('softWhiteNoiseVolume' in result && typeof result.softWhiteNoiseVolume === 'number') {
+      result.softWhiteNoiseVolume = Math.max(0, Math.min(1, result.softWhiteNoiseVolume));
     }
     if ('audioVolume' in result && typeof result.audioVolume === 'number') {
       result.audioVolume = Math.max(0, Math.min(1, result.audioVolume));
     }
     if ('audioSource' in result && typeof result.audioSource === 'string') {
-      if (!['tracks', 'brown-noise'].includes(result.audioSource)) {
-        result.audioSource = 'tracks';
+      if ((result.audioSource as string) === 'brown-noise' || (result.audioSource as string) === 'soft-white-noise') {
+        result.audioSource = 'white-noise';
+      }
+      if (!['tracks', 'white-noise'].includes(result.audioSource)) {
+        result.audioSource = 'white-noise';
       }
     }
     if ('audioMode' in result && typeof result.audioMode === 'string') {

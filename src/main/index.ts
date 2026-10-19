@@ -21,6 +21,7 @@ protocol.registerSchemesAsPrivileged([
       standard: true,
       secure: true,
       supportFetchAPI: true,
+      corsEnabled: true,
       stream: true,
       bypassCSP: true,
     },
@@ -54,8 +55,19 @@ app.whenReady().then(async () => {
   localAudioService = new LocalAudioService();
 
   // Register local-audio protocol for streaming local audio files securely
-  protocol.handle('local-audio', (request) => {
+  protocol.handle('local-audio', async (request) => {
     try {
+      if (request.method === 'OPTIONS') {
+        return new Response(null, {
+          status: 204,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+            'Access-Control-Allow-Headers': '*',
+          },
+        });
+      }
+
       const url = new URL(request.url);
       let rawId = url.pathname.replace(/^\/+/, '');
       if (url.host && url.host !== 'track' && (!rawId || rawId === '')) {
@@ -64,6 +76,26 @@ app.whenReady().then(async () => {
         rawId = rawId.substring('track/'.length);
       }
       const trackId = decodeURIComponent(rawId);
+
+      // Handle Soft White Noise audio stream alias
+      if (trackId === 'soft-white-noise' || rawId.startsWith('asset/soft-white-noise')) {
+        const softNoisePath = localAudioService.getSoftWhiteNoiseFile();
+        if (!softNoisePath || !fs.existsSync(softNoisePath)) {
+          return new Response('Soft white noise file not found', { status: 404 });
+        }
+        const res = await net.fetch(pathToFileURL(softNoisePath).href, {
+          headers: request.headers,
+          method: request.method,
+        });
+        const headers = new Headers(res.headers);
+        headers.set('Access-Control-Allow-Origin', '*');
+        return new Response(res.body, {
+          status: res.status,
+          statusText: res.statusText,
+          headers,
+        });
+      }
+
       const tracks = localAudioService.getTracks();
       const track = tracks.find(t => t.id === trackId);
       if (!track) {
@@ -84,9 +116,16 @@ app.whenReady().then(async () => {
       }
 
       // Forward request headers and method to net.fetch for HTTP Range / media seeking support
-      return net.fetch(pathToFileURL(realTrackPath).href, {
+      const res = await net.fetch(pathToFileURL(realTrackPath).href, {
         headers: request.headers,
         method: request.method,
+      });
+      const headers = new Headers(res.headers);
+      headers.set('Access-Control-Allow-Origin', '*');
+      return new Response(res.body, {
+        status: res.status,
+        statusText: res.statusText,
+        headers,
       });
     } catch (err) {
       console.error('Error handling local-audio protocol:', err);

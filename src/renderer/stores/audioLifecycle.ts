@@ -11,7 +11,7 @@ import { TimerState, AppSettings, SessionType, BackgroundAudioSource } from '../
  * - Pauses and resumes music cleanly with session pause/resume.
  * - Stops music cleanly on session stop, skip, or completion.
  * - Respects break audio settings (`playAudioDuringBreaks`).
- * - Handles settings changes (enabled/disabled, volume, track switch) during sessions safely.
+ * - Handles settings changes (enabled/disabled, volume, track switch, source switch) during sessions safely.
  * - Highly idempotent: 250ms timer ticks are filtered out instantly without overhead.
  * - Never autoplays on app launch or session recovery.
  */
@@ -20,7 +20,7 @@ class AudioLifecycleCoordinator {
   private lastSessionId: string | null = null;
   private lastSessionType: SessionType = 'focus';
   private lastAudioEnabled: boolean = false;
-  private lastAudioSource: BackgroundAudioSource = 'tracks';
+  private lastAudioSource: BackgroundAudioSource = 'white-noise';
   private lastPlayDuringBreaks: boolean = false;
   private lastAudioTrackId: string | null = null;
   private lastAudioVolume: number = 0.5;
@@ -42,7 +42,7 @@ class AudioLifecycleCoordinator {
     this.lastSessionId = initialTimer.sessionId;
     this.lastSessionType = initialTimer.sessionType;
     this.lastAudioEnabled = initialSettings.audioEnabled;
-    this.lastAudioSource = initialSettings.audioSource || 'tracks';
+    this.lastAudioSource = initialSettings.audioSource || 'white-noise';
     this.lastPlayDuringBreaks = initialSettings.playAudioDuringBreaks;
     this.lastAudioTrackId = initialSettings.audioTrackId;
     this.lastAudioVolume = initialSettings.audioVolume;
@@ -149,15 +149,17 @@ class AudioLifecycleCoordinator {
   private async startPlaybackForSession(timerState: TimerState, settings: AppSettings): Promise<void> {
     const generation = ++this.operationGeneration;
     const audioStore = useAudioStore.getState();
-    const source = settings.audioSource || 'tracks';
+    const source = settings.audioSource || 'white-noise';
 
-    // If source is built-in brown noise
-    if (source === 'brown-noise') {
-      audioStore.playBrownNoise();
+    if (source === 'white-noise') {
+      const ok = await audioStore.playSoftWhiteNoise();
+      if (!ok || generation !== this.operationGeneration) {
+        audioStore.pausePlayback();
+      }
       return;
     }
 
-    // Otherwise, local tracks:
+    // My Music (local tracks):
     let tracks = audioStore.tracks;
     if (!tracks || tracks.length === 0) {
       tracks = await audioStore.refreshLibrary();
@@ -238,19 +240,21 @@ class AudioLifecycleCoordinator {
       }
     }
 
-    // 3. Volume adjustment
-    if (settings.audioVolume !== this.lastAudioVolume) {
+    // 3. Volume adjustment from external settings sync (e.g. initial load or settings reset)
+    if (typeof settings.audioVolume === 'number' && Math.abs(settings.audioVolume - this.lastAudioVolume) > 0.001) {
       this.lastAudioVolume = settings.audioVolume;
-      audioStore.setAudioVolume(settings.audioVolume);
+      if (Math.abs(settings.audioVolume - audioStore.volume) > 0.001) {
+        audioStore.applyLiveVolume(settings.audioVolume);
+      }
     }
 
-    // 4. Track selection change during active session playback
+    // 4. Track selection change during active session playback in My Music
     if (settings.audioTrackId !== this.lastAudioTrackId) {
       this.lastAudioTrackId = settings.audioTrackId;
       if (
         audioStore.isPlaying &&
         !audioStore.isPlayingPreview &&
-        (settings.audioSource || 'tracks') === 'tracks' &&
+        (settings.audioSource || 'white-noise') === 'tracks' &&
         settings.audioTrackId &&
         settings.audioTrackId !== audioStore.currentPlaybackTrackId &&
         timerState.status === 'running' &&
@@ -260,11 +264,12 @@ class AudioLifecycleCoordinator {
       }
     }
 
-    // 5. Audio source change (tracks <-> brown-noise)
-    const currentSource = settings.audioSource || 'tracks';
+    // 5. Audio source change (Soft White Noise <-> My Music)
+    const currentSource = settings.audioSource || 'white-noise';
     if (currentSource !== this.lastAudioSource) {
       this.lastAudioSource = currentSource;
       if (timerState.status === 'running' && this.isEligible(timerState.sessionType, settings) && !audioStore.isManuallyPaused) {
+        audioStore.stopPlayback();
         this.startPlaybackForSession(timerState, settings);
       }
     }

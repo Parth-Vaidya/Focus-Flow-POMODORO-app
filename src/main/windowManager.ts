@@ -32,9 +32,9 @@ export class WindowManager {
 
   async createMainWindow(): Promise<BrowserWindow> {
     this.mainWindow = new BrowserWindow({
-      width: 960,
-      height: 680,
-      minWidth: 720,
+      width: 900,
+      height: 650,
+      minWidth: 700,
       minHeight: 520,
       show: false,
       backgroundColor: '#0f0f14',
@@ -134,15 +134,12 @@ export class WindowManager {
       },
     });
 
-    if (this.prefs.get('widgetAlwaysOnTop') !== false) {
-      this.widgetWindow.setAlwaysOnTop(true, 'screen-saver');
-      this.widgetWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-    }
+    this.applyWidgetAlwaysOnTop();
 
     if (show) {
       this.widgetWindow.once('ready-to-show', () => {
         this.widgetWindow?.show();
-        this.widgetWindow?.setAlwaysOnTop(true, 'screen-saver');
+        this.applyWidgetAlwaysOnTop();
       });
     }
 
@@ -173,7 +170,7 @@ export class WindowManager {
 
     if (show && this.widgetWindow && !this.widgetWindow.isVisible()) {
       this.widgetWindow.show();
-      this.widgetWindow.setAlwaysOnTop(true, 'screen-saver');
+      this.applyWidgetAlwaysOnTop();
     }
 
     return this.widgetWindow;
@@ -399,7 +396,7 @@ export class WindowManager {
           this.createWidgetWindow(true);
         } else if (!this.widgetWindow.isVisible()) {
           this.widgetWindow.show();
-          this.widgetWindow.setAlwaysOnTop(true, 'screen-saver');
+          this.applyWidgetAlwaysOnTop();
         }
       }
     }
@@ -479,7 +476,7 @@ export class WindowManager {
         this.createWidgetWindow(true);
       } else {
         this.widgetWindow.show();
-        this.widgetWindow.setAlwaysOnTop(true, 'screen-saver');
+        this.applyWidgetAlwaysOnTop();
       }
     }
   }
@@ -545,19 +542,27 @@ export class WindowManager {
       width: Math.round(targetWidth),
       height: Math.round(targetHeight),
     });
-    this.widgetWindow.setAlwaysOnTop(true, 'screen-saver');
+    this.applyWidgetAlwaysOnTop();
     setTimeout(() => {
       this.isProgrammaticMove = false;
     }, 150);
   }
 
   setWidgetAlwaysOnTop(value: boolean): void {
-    if (value) {
-      this.widgetWindow?.setAlwaysOnTop(true, 'screen-saver');
-    } else {
-      this.widgetWindow?.setAlwaysOnTop(false);
-    }
     this.prefs.set('widgetAlwaysOnTop', value);
+    this.applyWidgetAlwaysOnTop();
+  }
+
+  private applyWidgetAlwaysOnTop(): void {
+    if (!this.widgetWindow || this.widgetWindow.isDestroyed()) return;
+    const alwaysOnTop = this.prefs.get('widgetAlwaysOnTop') !== false;
+    if (alwaysOnTop) {
+      this.widgetWindow.setAlwaysOnTop(true, 'screen-saver');
+      this.widgetWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    } else {
+      this.widgetWindow.setAlwaysOnTop(false);
+      this.widgetWindow.setVisibleOnAllWorkspaces(false);
+    }
   }
 
   getMainWindow(): BrowserWindow | null { return this.mainWindow; }

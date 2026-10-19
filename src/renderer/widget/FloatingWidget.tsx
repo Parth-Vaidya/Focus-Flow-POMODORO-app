@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Play, Pause, SkipForward, RotateCcw, EyeOff, ChevronUp, GripVertical } from 'lucide-react';
+import { Play, Pause, SkipForward, RotateCcw, EyeOff, ChevronUp, GripVertical, Music, Info } from 'lucide-react';
 import { TimerState, AppSettings } from '../../shared/types';
 import { DEFAULT_SETTINGS } from '../../shared/constants';
 import { ThemeProvider } from '../components/ThemeProvider';
@@ -368,6 +368,59 @@ export default function FloatingWidget() {
           >
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
+
+          {/* Music Toggle & Info Shortcut */}
+          <div className="flex items-center gap-0.5">
+            {/* Music-note button */}
+            <button
+              data-interactive="true"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={async (e) => {
+                e.stopPropagation();
+                const next = !settings.audioEnabled;
+                await window.focusFlow?.settings?.set({ audioEnabled: next });
+              }}
+              className={cn(
+                'p-1 rounded-md transition-colors cursor-pointer',
+                settings.audioEnabled
+                  ? 'text-primary bg-primary/10'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+              )}
+              aria-label={settings.audioEnabled ? 'Disable background audio' : 'Enable background audio'}
+              title={settings.audioEnabled ? 'Background Audio: ON' : 'Background Audio: OFF'}
+            >
+              <Music className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Information shortcut */}
+            <div className="relative group/info flex items-center">
+              <button
+                data-interactive="true"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.focusFlow?.widget?.focusMain('/settings#audio');
+                }}
+                className="p-1 rounded-md text-muted-foreground/60 hover:text-primary hover:bg-secondary/80 focus-visible:text-primary transition-colors cursor-pointer"
+                aria-label="Customize focus sounds"
+              >
+                <Info className="w-3 h-3" />
+              </button>
+
+              {/* Hover / Focus Tooltip */}
+              <div
+                role="tooltip"
+                className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/info:flex group-focus-within/info:flex flex-col w-44 p-2 rounded-lg bg-popover/95 border border-border shadow-xl text-left z-50 backdrop-blur-sm animate-in fade-in zoom-in-95 duration-150"
+              >
+                <p className="text-[11px] font-semibold text-foreground leading-tight">
+                  Customize your focus sounds
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
+                  Choose Soft White Noise or your own music in Audio Settings.
+                </p>
+              </div>
+            </div>
+          </div>
 
           {/* Compact launcher */}
           <button
