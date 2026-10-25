@@ -16,7 +16,6 @@
   <img src="https://img.shields.io/badge/TypeScript-5.6-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/TailwindCSS-3.4-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white" alt="Tailwind CSS" />
   <img src="https://img.shields.io/badge/Storage-SQLite_(sql.js)-003B57?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite" />
-  <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License" />
 </p>
 
 <p align="center">
@@ -327,6 +326,3 @@ Created and developed by **Parth Vaidya**.
 
 ---
 
-## License
-
-This project is licensed under the [MIT License](LICENSE).
