@@ -44,32 +44,10 @@ It pairs a customizable Pomodoro engine with a lightweight **floating companion 
 FocusFlow is crafted with intention. Here is how each core interface and overlay mode empowers your deep work workflow:
 
 ### 1. Home & Session Setup (Interactive Control Center)
-```text
-┌─────────────────────────────────────────────────────────────┐
-│  (⏱) FocusFlow             Distraction-light focus sessions│
-│                                                             │
-│                          01 : 00                            │
-│                     ● Next focus session                    │
-│                                                             │
-│   Task name (optional)                                      │
-│   [ What are you working on?                              ] │
-│                                                             │
-│   [ ⚡ Start Focus Session                    ]  [ ♫ BGM ]  │
-│                                                             │
-│   Session setup                                [Collapse ∧] │
-│   ┌───────────────────────────┬───────────────────────────┐ │
-│   │ Focus          [-] 1 min[+] Short break   [-] 1 min[+]│ │
-│   │ Work interval             │ Quick rest                │ │
-│   ├───────────────────────────┼───────────────────────────┤ │
-│   │ Long break     [-] 1 min[+] Cycle count   [-]   2  [+]│ │
-│   │ Extended rest             │ Before long break         │ │
-│   └───────────────────────────┴───────────────────────────┘ │
-│                                                             │
-│   TODAY'S PROGRESS                            [📊 Analytics]│
-│   0m of 10m goal                             0 sessions     │
-│   ═════════════════════════════════════════════════════════ │
-└─────────────────────────────────────────────────────────────┘
-```
+
+<img width="671" height="850" alt="1" src="https://github.com/user-attachments/assets/d10fc2e7-39a6-4e20-be54-84fe093f5a46" />
+
+
 * **Upcoming Duration Readout**: Immediate, high-contrast digital display of your configured focus period.
 * **Inline Stepper Controls**: Rapidly configure intervals with single-click `-` / `+` steppers for focus time (1–120 min), short break (1–60 min), long break (1–120 min), and target cycles (1–16).
 * **Collapsible & Persistent**: Collapse the setup panel for an even cleaner view; your preferred expansion state is preserved across launches.
@@ -80,27 +58,9 @@ FocusFlow is crafted with intention. Here is how each core interface and overlay
 ---
 
 ### 2. Active Session View (Focus Mode)
-```text
-┌─────────────────────────────────────────────────────────────┐
-│                 ● Focus · Deep work time                    │
-│                     ● ○ Focus 1 of 2                        │
-│                     Unassigned task                         │
-│                                                             │
-│                         ╭─────────╮                         │
-│                       ╱             ╲                       │
-│                      │    29 : 30    │                      │
-│                      │     Focus     │                      │
-│                       ╲             ╱                       │
-│                         ╰─────────╯                         │
-│                                                             │
-│                    (↺)     [ ⏸ ]     (⏭)                    │
-│                                                             │
-│           [ ♫ BGM ]        [ ⏹ Stop ]        [ ⚙ Settings ] │
-│                                                             │
-│   Daily focus goal                              0m / 10m    │
-│   ───────────────────────────────────────────────────────── │
-└─────────────────────────────────────────────────────────────┘
-```
+
+<img width="966" height="852" alt="2" src="https://github.com/user-attachments/assets/4beb5365-1e8e-4afa-be05-c878ebaff90e" />
+
 * **Animated Progress Ring**: Smooth circular countdown with SVG progress arc that fills dynamically.
 * **Cycle Tracking Dots**: Visual progress indicators display exactly where you are in your cycle (e.g., `Focus 1 of 2`).
 * **Essential Controls**: Large central Pause/Resume toggle, Reset interval (`↺`), and Skip stage (`⏭`).
@@ -109,16 +69,9 @@ FocusFlow is crafted with intention. Here is how each core interface and overlay
 ---
 
 ### 3. Floating Companion Widget (Expanded View)
-```text
-        ┌───────────────────────────────────┐
-        │  ● FOCUS                      0/2 │
-        │  FocusFlow                        │
-        │                                   │
-        │  29 : 30                          │
-        │  ═══════════════════════════════  │
-        │  [⏸]  [⏭]  [↺]  [♫]  [ℹ]  [👁⃥]    │  <-- Revealed on hover
-        └───────────────────────────────────┘
-```
+ └───────────────────────────────────┘
+<img width="277" height="147" alt="3" src="https://github.com/user-attachments/assets/90935d3a-6a54-47f1-b484-13ba28360c75" />
+
 * **Ultra-Compact Overlay (220×120 px)**: Transparent, frameless window designed to float unobtrusively over code editors, terminals, or browsers.
 * **Always-on-Top**: Keep track of remaining time without switching windows or breaking flow.
 * **Hover Action Bar**: Hovering over the widget reveals immediate controls to pause/resume, skip, reset, toggle audio, focus the main app, or minimize the widget.
@@ -127,11 +80,8 @@ FocusFlow is crafted with intention. Here is how each core interface and overlay
 ---
 
 ### 4. Floating Capsule Mode (Minimalist Pill)
-```text
-                    ┌─────────────────────────┐
-                    │  ●   :::   28 : 30   ∧  │
-                    └─────────────────────────┘
-```
+<img width="186" height="52" alt="4" src="https://github.com/user-attachments/assets/aff4b84e-0521-4986-93b9-39095c264900" />
+
 * **Minimalist Footprint (140×36 px)**: Fits discreetly into menu bars, title bars, or corners.
 * **State Dot Indicator (`●`)**: Color-coded indicator matching your active session mode (purple for Focus, teal for Short Break, cyan for Long Break).
 * **Pointer-Capture Dragging (`:::`)**: Smooth dragging across monitors with a 6-pixel accidental movement discriminator.
