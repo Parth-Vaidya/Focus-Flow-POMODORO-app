@@ -69,7 +69,6 @@ FocusFlow is crafted with intention. Here is how each core interface and overlay
 ---
 
 ### 3. Floating Companion Widget (Expanded View)
- └───────────────────────────────────┘
 <img width="277" height="147" alt="3" src="https://github.com/user-attachments/assets/90935d3a-6a54-47f1-b484-13ba28360c75" />
 
 * **Ultra-Compact Overlay (220×120 px)**: Transparent, frameless window designed to float unobtrusively over code editors, terminals, or browsers.
