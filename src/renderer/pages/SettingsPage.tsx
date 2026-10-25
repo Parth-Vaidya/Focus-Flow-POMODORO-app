@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useThemeStore } from '../stores/themeStore';
 import { Switch } from '../components/ui/switch';
@@ -77,6 +77,7 @@ const TIMER_STYLES: { value: TimerStyle; label: string }[] = [
 ];
 
 export default function SettingsPage() {
+  const navigate = useNavigate();
   const { settings, update, reset } = useSettingsStore();
   const { themes, load: loadThemes, refresh: refreshThemes, openFolder: openThemesFolder } = useThemeStore();
   const {
@@ -242,59 +243,14 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="p-8 max-w-2xl">
+    <div className="p-5 sm:p-8 max-w-2xl">
       <h1 className="text-2xl font-bold mb-1">Settings</h1>
       <p className="text-sm text-muted-foreground mb-8">Customize your FocusFlow experience</p>
 
-      {/* Timer durations */}
+      {/* Daily Goal */}
       <section className="mb-6">
-        <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Timer Configuration</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Daily Goal</h2>
         <div className="bg-card rounded-xl border border-border px-4">
-          <DurationSlider
-            label="Focus Duration"
-            value={msToMin(settings.focusDurationMs)}
-            min={1} max={120}
-            onChange={v => update({ focusDurationMs: minToMs(v) })}
-          />
-          <Separator />
-          <DurationSlider
-            label="Short Break Duration"
-            value={msToMin(settings.shortBreakDurationMs)}
-            min={1} max={60}
-            onChange={v => update({ shortBreakDurationMs: minToMs(v) })}
-          />
-          <Separator />
-          <DurationSlider
-            label="Long Break Duration"
-            value={msToMin(settings.longBreakDurationMs)}
-            min={1} max={120}
-            onChange={v => update({ longBreakDurationMs: minToMs(v) })}
-          />
-          <Separator />
-          <SettingRow label="Long Break Interval" description="Completed focus sessions before a long break">
-            <div className="flex items-center gap-3 w-48">
-              <Slider
-                min={1} max={10} step={1}
-                value={[settings.longBreakInterval]}
-                onValueChange={([v]) => update({ longBreakInterval: v })}
-                className="flex-1"
-              />
-              <span className="text-sm font-mono w-6 text-right tabular-nums">{settings.longBreakInterval}</span>
-            </div>
-          </SettingRow>
-          <Separator />
-          <SettingRow label="Total Focus Sessions" description="Target focus sessions to complete the cycle">
-            <div className="flex items-center gap-3 w-48">
-              <Slider
-                min={1} max={16} step={1}
-                value={[settings.totalFocusSessions ?? 4]}
-                onValueChange={([v]) => update({ totalFocusSessions: v })}
-                className="flex-1"
-              />
-              <span className="text-sm font-mono w-6 text-right tabular-nums">{settings.totalFocusSessions ?? 4}</span>
-            </div>
-          </SettingRow>
-          <Separator />
           <DurationSlider
             label="Daily Focus Goal"
             value={msToMin(settings.dailyGoalMs)}
@@ -302,6 +258,15 @@ export default function SettingsPage() {
             onChange={v => update({ dailyGoalMs: minToMs(v) })}
           />
         </div>
+        <p className="text-xs text-muted-foreground mt-2 px-1">
+          Session durations and cycle counts are configured directly on the{' '}
+          <button
+            onClick={() => navigate('/')}
+            className="text-primary hover:underline font-medium cursor-pointer"
+          >
+            Home dashboard
+          </button>.
+        </p>
       </section>
 
       {/* Appearance */}

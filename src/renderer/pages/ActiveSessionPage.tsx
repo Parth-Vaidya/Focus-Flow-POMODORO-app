@@ -69,7 +69,7 @@ export default function ActiveSessionPage() {
   const totalTarget = settings.totalFocusSessions || settings.longBreakInterval || 4;
 
   return (
-    <div className="flex flex-col items-center justify-between min-h-full p-8 py-10">
+    <div className="flex flex-col items-center justify-between min-h-full p-6 py-6 sm:p-8 sm:py-8">
       {/* Top status & task header */}
       <div className="flex flex-col items-center gap-2 w-full max-w-md">
         <div className="flex items-center gap-2">

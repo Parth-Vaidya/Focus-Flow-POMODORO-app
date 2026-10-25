@@ -74,8 +74,8 @@ export default function AnalyticsPage() {
   const noData = !data || (data.todayStats.totalFocusMs === 0 && data.sevenDayChart.length === 0);
 
   return (
-    <div className="p-8 max-w-3xl">
-      <div className="flex items-center gap-2 mb-8">
+    <div className="p-5 sm:p-8 max-w-3xl">
+      <div className="flex items-center gap-2 mb-6">
         <BarChart2 className="w-5 h-5 text-primary" />
         <h1 className="text-2xl font-bold">Analytics</h1>
       </div>

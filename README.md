@@ -1,127 +1,225 @@
 # FocusFlow
 
 <p align="center">
-  <img src="public/icon.svg" width="72" height="72" alt="FocusFlow Logo" />
+  <img src="public/icon.svg" width="80" height="80" alt="FocusFlow Logo" />
+</p>
+
+<h3 align="center">Distraction-Light Pomodoro Desktop Application</h3>
+
+<p align="center">
+  A local-first, beautifully crafted Pomodoro productivity desktop app engineered for deep work, effortless break scheduling, and sustainable focus habits.
 </p>
 
 <p align="center">
-  <strong>A focused, customizable Pomodoro desktop app designed to help you work with intention, take meaningful breaks, and build consistent focus habits.</strong>
+  <img src="https://img.shields.io/badge/Electron-33.2.0-47848F?style=flat-square&logo=electron&logoColor=white" alt="Electron 33" />
+  <img src="https://img.shields.io/badge/React-18.3.1-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React 18" />
+  <img src="https://img.shields.io/badge/TypeScript-5.6-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/TailwindCSS-3.4-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white" alt="Tailwind CSS" />
+  <img src="https://img.shields.io/badge/Storage-SQLite_(sql.js)-003B57?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite" />
+  <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License" />
 </p>
 
 <p align="center">
+  <a href="#visual-tour--interface-breakdown">Interface Tour</a> •
   <a href="#key-features">Features</a> •
+  <a href="#floating-companion-widget">Floating Widget</a> •
+  <a href="#audio--ambient-sound-engine">Audio Engine</a> •
   <a href="#architecture--tech-stack">Architecture</a> •
-  <a href="#project-structure">Project Structure</a> •
   <a href="#getting-started">Getting Started</a> •
-  <a href="#custom-themes--audio-guide">Themes & Audio</a> •
-  <a href="#data-storage--privacy">Data Storage</a>
+  <a href="#custom-themes--music-guide">Themes & Audio</a>
 </p>
 
 ---
 
 ## Overview
 
-**FocusFlow** is a local-first, distraction-light Pomodoro productivity application engineered for the desktop. Built with **Electron**, **React 18**, **TypeScript**, and **Tailwind CSS**, it replaces bloated web timers and notification-heavy tools with a quiet, responsive focus environment.
+**FocusFlow** is a modern, privacy-respecting desktop application designed to eliminate digital clutter while keeping you immersed in your tasks. Unlike browser-based timers that compete for attention in a sea of tabs or cloud-synced productivity suites loaded with telemetry, FocusFlow runs **entirely offline** on your machine.
 
-FocusFlow runs entirely on your local machine: session histories, preferences, and custom themes are stored locally without remote telemetry, tracking, or cloud dependencies. With a dedicated floating companion widget, continuous background audio, rich analytics, and deep session recovery, FocusFlow keeps your attention where it belongs—on your work.
+It pairs a customizable Pomodoro engine with a lightweight **floating companion widget**, integrated **background ambient audio** (Soft White Noise & local music streaming), rich **visual analytics**, and **session crash recovery**—all wrapped in an ultra-sleek, themeable dark aesthetic.
+
+---
+
+## Visual Tour & Interface Breakdown
+
+FocusFlow is crafted with intention. Here is how each core interface and overlay mode empowers your deep work workflow:
+
+### 1. Home & Session Setup (Interactive Control Center)
+```text
+┌─────────────────────────────────────────────────────────────┐
+│  (⏱) FocusFlow             Distraction-light focus sessions│
+│                                                             │
+│                          01 : 00                            │
+│                     ● Next focus session                    │
+│                                                             │
+│   Task name (optional)                                      │
+│   [ What are you working on?                              ] │
+│                                                             │
+│   [ ⚡ Start Focus Session                    ]  [ ♫ BGM ]  │
+│                                                             │
+│   Session setup                                [Collapse ∧] │
+│   ┌───────────────────────────┬───────────────────────────┐ │
+│   │ Focus          [-] 1 min[+] Short break   [-] 1 min[+]│ │
+│   │ Work interval             │ Quick rest                │ │
+│   ├───────────────────────────┼───────────────────────────┤ │
+│   │ Long break     [-] 1 min[+] Cycle count   [-]   2  [+]│ │
+│   │ Extended rest             │ Before long break         │ │
+│   └───────────────────────────┴───────────────────────────┘ │
+│                                                             │
+│   TODAY'S PROGRESS                            [📊 Analytics]│
+│   0m of 10m goal                             0 sessions     │
+│   ═════════════════════════════════════════════════════════ │
+└─────────────────────────────────────────────────────────────┘
+```
+* **Upcoming Duration Readout**: Immediate, high-contrast digital display of your configured focus period.
+* **Inline Stepper Controls**: Rapidly configure intervals with single-click `-` / `+` steppers for focus time (1–120 min), short break (1–60 min), long break (1–120 min), and target cycles (1–16).
+* **Collapsible & Persistent**: Collapse the setup panel for an even cleaner view; your preferred expansion state is preserved across launches.
+* **Task Tagging & Quick Start**: Add optional task context and launch with one click or hit <kbd>Enter</kbd>.
+* **Direct BGM Launcher**: Toggle your background ambient track right from the launchpad.
+* **Daily Goal Progress**: Tracks completed sessions and minutes focused against your daily target.
+
+---
+
+### 2. Active Session View (Focus Mode)
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                 ● Focus · Deep work time                    │
+│                     ● ○ Focus 1 of 2                        │
+│                     Unassigned task                         │
+│                                                             │
+│                         ╭─────────╮                         │
+│                       ╱             ╲                       │
+│                      │    29 : 30    │                      │
+│                      │     Focus     │                      │
+│                       ╲             ╱                       │
+│                         ╰─────────╯                         │
+│                                                             │
+│                    (↺)     [ ⏸ ]     (⏭)                    │
+│                                                             │
+│           [ ♫ BGM ]        [ ⏹ Stop ]        [ ⚙ Settings ] │
+│                                                             │
+│   Daily focus goal                              0m / 10m    │
+│   ───────────────────────────────────────────────────────── │
+└─────────────────────────────────────────────────────────────┘
+```
+* **Animated Progress Ring**: Smooth circular countdown with SVG progress arc that fills dynamically.
+* **Cycle Tracking Dots**: Visual progress indicators display exactly where you are in your cycle (e.g., `Focus 1 of 2`).
+* **Essential Controls**: Large central Pause/Resume toggle, Reset interval (`↺`), and Skip stage (`⏭`).
+* **Active Toolbar**: Instant access to background audio toggles, session termination, and app settings.
+
+---
+
+### 3. Floating Companion Widget (Expanded View)
+```text
+        ┌───────────────────────────────────┐
+        │  ● FOCUS                      0/2 │
+        │  FocusFlow                        │
+        │                                   │
+        │  29 : 30                          │
+        │  ═══════════════════════════════  │
+        │  [⏸]  [⏭]  [↺]  [♫]  [ℹ]  [👁⃥]    │  <-- Revealed on hover
+        └───────────────────────────────────┘
+```
+* **Ultra-Compact Overlay (220×120 px)**: Transparent, frameless window designed to float unobtrusively over code editors, terminals, or browsers.
+* **Always-on-Top**: Keep track of remaining time without switching windows or breaking flow.
+* **Hover Action Bar**: Hovering over the widget reveals immediate controls to pause/resume, skip, reset, toggle audio, focus the main app, or minimize the widget.
+* **Screen Margin Docking**: Intelligently snaps to the nearest screen edges (left, right, top, bottom) within your monitor's usable work area.
+
+---
+
+### 4. Floating Capsule Mode (Minimalist Pill)
+```text
+                    ┌─────────────────────────┐
+                    │  ●   :::   28 : 30   ∧  │
+                    └─────────────────────────┘
+```
+* **Minimalist Footprint (140×36 px)**: Fits discreetly into menu bars, title bars, or corners.
+* **State Dot Indicator (`●`)**: Color-coded indicator matching your active session mode (purple for Focus, teal for Short Break, cyan for Long Break).
+* **Pointer-Capture Dragging (`:::`)**: Smooth dragging across monitors with a 6-pixel accidental movement discriminator.
+* **1-Click Expand (`∧`)**: Tap the chevron to restore the expanded widget card.
 
 ---
 
 ## Key Features
 
-### ⏱️ Pomodoro Session Engine
-* **Configurable Intervals**: Customize focus sessions (1–120 min), short breaks (1–60 min), and long breaks (1–120 min).
-* **Automated Cycle Progression**: Set interval counts before long breaks (1–10 sessions) and define total target cycles (1–16 sessions). FocusFlow automatically transitions between focus periods and breaks.
-* **Precise Wall-Clock Timing**: The core `TimerEngine` tracks timestamps against wall-clock deadlines (`sessionDeadlineMs`) rather than depending solely on tick counts, eliminating timer drift when system resources fluctuate.
-* **Task Tagging**: Assign task names to focus blocks to track specific objectives across your work sessions.
-* **Session Controls**: Instant pause, resume, restart, and skip controls with keyboard shortcut support (<kbd>Spacebar</kbd> to toggle pause/resume).
+### ⏱️ Session Engine
+* **Precise Wall-Clock Timing**: The core `TimerEngine` tracks timestamps against wall-clock deadlines (`sessionDeadlineMs`) rather than tick counts, guaranteeing zero timer drift even during system sleep or heavy CPU load.
+* **Automatic Stage Progression**: Smooth transitions from focus sessions to short breaks and scheduled long breaks.
+* **Configurable Cycles**: Choose how many focus sessions complete a full block before triggering extended rest.
+* **Keyboard Hotkeys**: Hit <kbd>Spacebar</kbd> to quickly pause or resume your active timer.
 
-### 🪟 Floating Desktop Widget
-* **Companion Window**: A frameless, transparent Electron overlay that hovers cleanly over your active applications.
-* **Always-on-Top Support**: Toggle always-on-top behavior to monitor your remaining time during full-screen coding, reading, or designing.
-* **Dual Display Modes**:
-  * **Expanded View (220×120 px)**: Shows current stage badge, task label, numerical countdown, session progress bar, and hover action controls.
-  * **Compact Capsule (140×36 px)**: Minimalist pill displaying active session indicator and remaining time to conserve screen space.
-* **Intelligent Edge Docking**: Detects nearest screen boundaries (`left`, `right`, `top`, `bottom`) and automatically snaps the widget to margins within the active display's work area.
-* **Pointer Capture Dragging**: Smooth pointer-capture dragging featuring a 6-pixel threshold discrimination filter to prevent accidental drag triggers on button clicks.
-* **Quick-Access Toolbar**: Hovering over the expanded widget reveals controls to pause/resume, skip stages, restart, toggle background music, and jump directly to settings.
+### 🪟 Desktop Companion Widget
+* **Dual Display Profiles**: Switch effortlessly between the **Expanded Card** (220×120) and **Compact Capsule** (140×36).
+* **Independent Surface Dragging**: Grab and drag the widget anywhere across multi-monitor setups.
+* **Boundary Snapping**: Automatically respects Windows Taskbar, macOS Dock, and display work areas.
 
-### 🎧 Audio & Ambient Sound
-* **Bundled Ambient Audio**: Includes a packaged 56 MB continuous **Soft White Noise** (`soft-white-noise.mp3`) track designed for distraction-free deep work.
-* **Local Music Library ("My Music")**: Point FocusFlow to any local music directory and stream your own audio files. Supports `.mp3`, `.wav`, `.ogg`, `.flac`, `.m4a`, and `.aac`.
-* **Playback Modes**: Choose between **Sequential** (track-by-track), **Shuffle** (randomized selection), or **Single** (repeat current track).
-* **Break Audio Policy**: Configure whether background audio continues through rest periods or mutes automatically during short and long breaks.
-* **Secure Streaming Protocol**: Custom privileged `local-audio://` Electron protocol with HTTP Range request support for seamless seeking, streaming, and path-traversal security verification.
-* **Completion Chimes**: Gentle two-tone chime (880 Hz / 1100 Hz) synthesized via the Web Audio API on session completion, alongside native OS desktop notifications.
+### 🎧 Audio & Ambient Sound Engine
+* **Bundled Soft White Noise**: Includes an integrated, continuous 56 MB ambient audio track (`soft-white-noise.mp3`) tailored for concentration.
+* **Custom Music Library ("My Music")**: Point FocusFlow to any folder on your computer to stream your personal music tracks (`.mp3`, `.wav`, `.ogg`, `.flac`, `.m4a`, `.aac`).
+* **Smart Break Handling**: Choose whether music mutes automatically during breaks or keeps playing.
+* **Playback Modes**: Loop a single track, cycle sequentially, or shuffle your library.
+* **Custom Protocol Streaming**: Audio is served via a privileged `local-audio://` streaming protocol supporting HTTP Range requests for instant seeking and zero memory overhead.
+* **Web Audio Chimes**: Gentle two-tone chimes (880 Hz / 1100 Hz) synthesized directly in the browser runtime on session milestones.
 
-### 🎨 Themes & Visual Customization
+### 🎨 Visual Customization & Themes
 * **4 Built-in Color Themes**:
-  * **Midnight**: Sleek, distraction-free deep dark purple palette (default).
-  * **Dark Burgundy**: Deep warm wine tones for low-light environments.
-  * **Muted Plum**: Soft, low-contrast violet accents.
-  * **Warm Sand**: High-legibility sepia light theme.
-* **Extensible Custom Themes**: Create and drop custom `.json` color schemes into the application's `themes/` directory. FocusFlow validates, normalizes (Hex/HSL), and hot-reloads them dynamically.
-* **Timer Styles**: Switch between classic digital readout (`MM:SS`) and a circular progress ring.
+  * **Midnight** (Default): High-focus deep dark purple palette.
+  * **Dark Burgundy**: Rich, warm wine tones designed for late-night sessions.
+  * **Muted Plum**: Soft, low-contrast lavender and violet hues.
+  * **Warm Sand**: High-legibility light sepia theme.
+* **Extensible JSON Theme Engine**: Drop your own `.json` theme file into the application's `themes/` directory for instant live-reloading.
 
-### 📊 Local Analytics & Session History
-* **SQLite Persistence**: Backed by `sql.js` (WebAssembly SQLite) stored locally at `focusflow.db`.
-* **7-Day Interactive Chart**: Visual bar chart powered by Recharts comparing daily active focus duration against your configurable daily goal.
-* **Productivity Metrics**: View Focus Today, Completed Sessions, Current Day Streak, and All-Time Best Streak.
-* **Task Breakdown**: Summaries detailing total focus time and completed intervals grouped by task label.
-* **Searchable Log**: Inspect, search, and delete individual past records (focus, breaks, completed, skipped, or stopped).
-* **CSV Export**: Export all session history to a CSV file for personal tracking or external spreadsheet analysis.
+### 📊 Local Analytics & History
+* **SQLite (WASM)**: High-performance local storage powered by `sql.js`.
+* **7-Day Trend Visualizer**: Interactive chart comparing actual focus time against your daily target.
+* **Streak Tracking**: Monitors current daily streaks and personal best records.
+* **Searchable Session Log**: Inspect past sessions by date, duration, completion status, and task label.
+* **CSV Export**: Export your historical data anytime for external analysis or backups.
 
-### 🛡️ Crash & Interruption Recovery
-* **Periodic Checkpoints**: State is automatically serialized to `recovery.json` every 10 seconds and flushed on graceful application shutdown.
-* **Unplanned Closure Restoration**: If the app or system closes unexpectedly while a session is running, FocusFlow detects the interrupted state on relaunch and prompts you to resume where you left off.
-* **Close-to-Background Handling**: Closing the main window while a focus session is active hides the window while keeping the timer and floating widget running.
+### 🛡️ Crash & State Recovery
+* **State Checkpoints**: The active timer state is serialized to `recovery.json` every 10 seconds.
+* **Unplanned Exit Protection**: In the event of an unexpected shutdown or reboot, FocusFlow detects the interrupted session upon relaunch and offers to restore it.
+* **Close-to-Tray / Background Execution**: Closing the main window while a focus session is active simply hides it, leaving the companion widget and timer active.
 
 ---
 
 ## Architecture & Tech Stack
 
-FocusFlow implements a multi-process Electron architecture adhering strictly to modern security standards (`contextIsolation: true`, `nodeIntegration: false`, typed IPC boundaries).
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                       Electron Main                         │
-│  ┌─────────────────┐  ┌──────────────┐  ┌────────────────┐  │
-│  │   TimerEngine   │  │WindowManager │  │  SQLite DB     │  │
-│  │  (Wall-clock)   │  │ (Main/Widget)│  │   (sql.js)     │  │
-│  └────────┬────────┘  └──────┬───────┘  └───────┬────────┘  │
-│           │                  │                  │           │
-│  ┌────────┴────────┐  ┌──────┴───────┐  ┌───────┴────────┐  │
-│  │LocalAudioService│  │ ThemeService │  │PreferencesStore│  │
-│  │ (local-audio://)│  │ (JSON Engine)│  │(electron-store)│  │
-│  └─────────────────┘  └──────────────┘  └────────────────┘  │
-└──────────────────────────────┬──────────────────────────────┘
-                               │ Typed IPC Channels
-┌──────────────────────────────┴──────────────────────────────┐
-│                    Preload (contextBridge)                  │
-│                     window.focusFlow.*                      │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-┌──────────────────────────────┴──────────────────────────────┐
-│                   Renderer (React 18 + Vite)                │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │ Zustand Stores: timerStore · audioStore · themeStore   │ │
-│  │ Pages: Home · ActiveSession · Analytics · History      │ │
-│  │ Components: FloatingWidget · TimerDisplay · Radix UI   │ │
-│  │ Styling: Tailwind CSS (HSL CSS Variables)              │ │
-│  └────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
+```text
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        Electron Main Process                            │
+│  ┌────────────────────┐  ┌────────────────────┐  ┌───────────────────┐  │
+│  │    TimerEngine     │  │   WindowManager    │  │  SQLite Database  │  │
+│  │ (Wall-clock Engine)│  │ (Main & Companion) │  │  (sql.js WASM)    │  │
+│  └─────────┬──────────┘  └─────────┬──────────┘  └─────────┬─────────┘  │
+│            │                       │                       │            │
+│  ┌─────────┴──────────┐  ┌─────────┴──────────┐  ┌─────────┴─────────┐  │
+│  │ LocalAudioService  │  │    ThemeService    │  │ PreferencesStore  │  │
+│  │ (local-audio://)   │  │ (JSON Color Engine)│  │ (electron-store)  │  │
+│  └────────────────────┘  └────────────────────┘  └───────────────────┘  │
+└────────────────────────────────────┬────────────────────────────────────┘
+                                     │ Typed IPC (preload contextBridge)
+┌────────────────────────────────────┴────────────────────────────────────┐
+│                    React 18 + Vite Renderer Process                     │
+│  ┌───────────────────────────────────────────────────────────────────┐  │
+│  │ Zustand Stores (timerStore · audioStore · settingsStore)          │  │
+│  │ UI Views: HomePage · SessionPage · AnalyticsPage · HistoryPage    │  │
+│  │ Overlays: FloatingWidget (Expanded & Capsule)                     │  │
+│  │ Design Tokens: Tailwind CSS 3 (Dynamic HSL Variables)             │  │
+│  └───────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Core Technologies
-
-| Layer | Technologies |
-| :--- | :--- |
-| **Desktop Shell** | [Electron 33](https://www.electronjs.org/) |
-| **Frontend UI** | [React 18](https://react.dev/), [Vite 5](https://vitejs.dev/), [TypeScript 5](https://www.typescriptlang.org/) |
-| **Styling & Icons** | [Tailwind CSS 3](https://tailwindcss.com/), [Radix UI](https://www.radix-ui.com/), [Lucide React](https://lucide.dev/) |
-| **State Management** | [Zustand 5](https://github.com/pmndrs/zustand) |
-| **Data & Charts** | [sql.js (SQLite WASM)](https://sql.js.org/), [electron-store 8](https://github.com/sindresorhus/electron-store), [Recharts 2](https://recharts.org/) |
-| **Packaging** | [electron-builder 25](https://www.electron.build/) |
+| Layer | Technology | Purpose |
+| :--- | :--- | :--- |
+| **Shell** | [Electron 33](https://www.electronjs.org/) | Cross-platform window lifecycle and native OS integration |
+| **UI Framework** | [React 18](https://react.dev/) | Declarative component UI and reactive store bindings |
+| **Bundler** | [Vite 5](https://vitejs.dev/) | Instant HMR and optimized production bundles |
+| **Language** | [TypeScript 5](https://www.typescriptlang.org/) | End-to-end type safety across Main, Preload, and Renderer |
+| **State** | [Zustand 5](https://github.com/pmndrs/zustand) | Lightweight, performant client-side state management |
+| **Styles** | [Tailwind CSS 3](https://tailwindcss.com/) | Curated utility classes driven by dynamic HSL CSS tokens |
+| **Database** | [sql.js](https://sql.js.org/) | Local-first WebAssembly SQLite database |
+| **Charts** | [Recharts 2](https://recharts.org/) | Composable SVG productivity visualization |
+| **Icons** | [Lucide React](https://lucide.dev/) | Clean, consistent interface iconography |
 
 ---
 
@@ -129,38 +227,35 @@ FocusFlow implements a multi-process Electron architecture adhering strictly to 
 
 ```text
 FocusFlow/
-├── public/                     # Static assets and bundled resources
-│   ├── audio/                  # Bundled Soft White Noise audio file
-│   └── icon.svg                # Application vector brand icon
-├── scripts/                    # Development workflow and binary setup scripts
-│   ├── dev.js                  # Concurrently spawns Vite dev server and Electron
-│   └── setup-electron.js       # Verifies local Electron runtime binaries
+├── public/                     # Static assets, branding, and bundled audio
+│   ├── audio/                  # Soft White Noise audio asset
+│   └── icon.svg                # Application logo
+├── scripts/                    # Development runners and Electron orchestrator
+│   ├── dev.js                  # Starts Vite and Electron concurrently
+│   └── setup-electron.js       # Pre-flight runtime dependency check
 ├── src/
-│   ├── core/                   # Core business logic isolated from UI
-│   │   ├── audio/              # LocalAudioService (file scanner, protocol handler)
-│   │   ├── persistence/        # SQLite Database (db.ts), Preferences & Recovery stores
-│   │   ├── theme/              # ThemeService (built-in themes, JSON loader, color parser)
-│   │   └── timer/              # TimerEngine (wall-clock timing, cycle state machine)
-│   ├── main/                   # Electron main process
-│   │   ├── index.ts            # App entrypoint, custom protocol registration, lifecycle
-│   │   ├── ipcHandlers.ts      # Strongly typed IPC request/reply registrations
-│   │   └── windowManager.ts    # Main and widget window creation, dragging, and snapping
-│   ├── preload/                # Secure contextBridge preload scripts
-│   │   └── index.ts            # Type-safe window.focusFlow API exposed to renderer
-│   ├── renderer/               # React application UI
-│   │   ├── components/         # Reusable UI controls, Radix primitives, TimerDisplay
-│   │   ├── pages/              # Views (Home, ActiveSession, Analytics, History, Settings)
-│   │   ├── stores/             # Zustand stores (timerStore, audioStore, settingsStore)
-│   │   ├── styles/             # Global CSS variables and Tailwind setup
-│   │   ├── widget/             # FloatingWidget companion UI component
-│   │   ├── index.html          # Main window HTML host
-│   │   └── widget.html         # Floating widget HTML host
-│   └── shared/                 # Shared contracts across processes
-│       ├── constants.ts        # Default settings, tick rates, and dimension limits
-│       └── types.ts            # Universal TypeScript interfaces and IPC channel constants
-├── package.json                # Project configuration, dependencies, and build metadata
-├── tailwind.config.js          # Tailwind theme configuration with HSL variable mapping
-└── tsconfig.json               # TypeScript base configuration
+│   ├── core/                   # Pure business logic (framework independent)
+│   │   ├── audio/              # LocalAudioService & local-audio:// streaming
+│   │   ├── persistence/        # SQLite database (db.ts), Preferences & Recovery
+│   │   ├── theme/              # Custom theme parser and JSON validator
+│   │   └── timer/              # Wall-clock TimerEngine state machine
+│   ├── main/                   # Electron Main process
+│   │   ├── index.ts            # Entrypoint and app lifecycle management
+│   │   ├── ipcHandlers.ts      # Strongly typed IPC handlers
+│   │   └── windowManager.ts    # Main and widget window creation & physics
+│   ├── preload/                # Secure preload script
+│   │   └── index.ts            # window.focusFlow bridge interface
+│   ├── renderer/               # React 18 frontend
+│   │   ├── components/         # Button, Input, Progress, Dialog primitives
+│   │   ├── pages/              # Home, Session, Analytics, History, Settings
+│   │   ├── stores/             # timerStore, audioStore, settingsStore
+│   │   ├── styles/             # globals.css with HSL theme color definitions
+│   │   └── widget/             # FloatingWidget overlay UI component
+│   └── shared/                 # Universal types, constants, and contracts
+│       ├── constants.ts        # Defaults, tick rates, and widget limits
+│       └── types.ts            # Shared TypeScript interfaces & IPC channels
+├── package.json
+└── tailwind.config.js
 ```
 
 ---
@@ -188,100 +283,101 @@ FocusFlow/
    ```bash
    npm run dev
    ```
-   *This starts the Vite renderer server on `http://localhost:5173`, compiles the Electron TypeScript sources, and launches the desktop app.*
+   *This compiles the Electron TypeScript backend, boots the Vite dev server, and opens the FocusFlow application.*
 
 ---
 
 ## Available Scripts
 
-| Script | Purpose |
+| Command | Description |
 | :--- | :--- |
-| `npm run dev` | Runs the full development environment (Vite dev server + Electron main process). |
-| `npm run dev:vite` | Starts only the Vite renderer development server. |
-| `npm run dev:electron` | Compiles the Electron TypeScript files and launches the Electron application. |
-| `npm run build` | Builds both renderer (`vite build`) and Electron main/preload (`tsc`). |
-| `npm run build:renderer`| Compiles TypeScript renderer sources and builds production web assets. |
-| `npm run build:electron`| Compiles TypeScript source files for main and preload processes. |
-| `npm run type-check` | Runs the TypeScript compiler check (`tsc --noEmit`) across the project. |
-| `npm run lint` | Runs ESLint over TypeScript source files in `src/`. |
+| `npm run dev` | Spawns the full development environment with hot-reloading |
+| `npm run dev:vite` | Runs only the frontend Vite development server (`http://localhost:5173`) |
+| `npm run dev:electron` | Compiles Electron TypeScript and boots the native shell |
+| `npm run build` | Compiles both Vite web assets and Electron main/preload binaries |
+| `npm run type-check` | Executes `tsc --noEmit` across all project modules |
+| `npm run lint` | Runs ESLint across the TypeScript codebase |
 
 ---
 
-## Custom Themes & Audio Guide
+## Custom Themes & Music Guide
 
 ### 🎨 Creating Custom Themes
-FocusFlow supports user-authored color schemes via JSON files.
+FocusFlow allows full visual freedom through simple JSON files.
 
-1. Open **Settings** → **Appearance & Themes** → click **Open Themes Folder** (or navigate to `<userData>/themes/`).
-2. Create a new `.json` file (e.g., `nord-aurora.json`).
-3. Define the theme properties using **Hex** (`#10b981`) or **HSL** (`160 84% 39%`):
+1. Go to **Settings** → **Appearance & Themes** → click **Open Themes Folder** (or navigate to `<userData>/themes/`).
+2. Create a JSON file (e.g., `dracula-focus.json`).
+3. Define the color values using **Hex** (`#bd93f9`) or **HSL** (`265 89% 78%`):
 
 ```json
 {
-  "id": "nord-aurora",
-  "name": "Nord Aurora",
+  "id": "dracula-focus",
+  "name": "Dracula Focus",
   "version": "1.0",
   "author": "Your Name",
   "colors": {
-    "background": "#2e3440",
-    "foreground": "#eceff4",
-    "card": "#3b4252",
-    "cardForeground": "#eceff4",
-    "popover": "#3b4252",
-    "popoverForeground": "#eceff4",
-    "primary": "#88c0d0",
-    "primaryForeground": "#2e3440",
-    "secondary": "#434c5e",
-    "secondaryForeground": "#d8dee9",
-    "muted": "#4c566a",
-    "mutedForeground": "#d8dee9",
-    "accent": "#81a1c1",
-    "accentForeground": "#2e3440",
-    "destructive": "#bf616a",
-    "destructiveForeground": "#eceff4",
-    "border": "#434c5e",
-    "input": "#434c5e",
-    "ring": "#88c0d0",
-    "timerFocus": "#88c0d0",
-    "timerShortBreak": "#a3be8c",
-    "timerLongBreak": "#b48ead"
+    "background": "#282a36",
+    "foreground": "#f8f8f2",
+    "card": "#21222c",
+    "cardForeground": "#f8f8f2",
+    "popover": "#21222c",
+    "popoverForeground": "#f8f8f2",
+    "primary": "#bd93f9",
+    "primaryForeground": "#282a36",
+    "secondary": "#44475a",
+    "secondaryForeground": "#f8f8f2",
+    "muted": "#44475a",
+    "mutedForeground": "#6272a4",
+    "accent": "#ff79c6",
+    "accentForeground": "#282a36",
+    "destructive": "#ff5555",
+    "destructiveForeground": "#f8f8f2",
+    "border": "#44475a",
+    "input": "#44475a",
+    "ring": "#bd93f9",
+    "timerFocus": "#bd93f9",
+    "timerShortBreak": "#50fa7b",
+    "timerLongBreak": "#8be9fd"
   }
 }
 ```
-4. Click **Refresh Themes** in Settings. Your theme appears immediately in the theme selector.
+4. Click **Refresh Themes** in Settings to activate your custom theme.
 
-### 🎵 Adding Custom Music
-1. In FocusFlow, go to **Settings** → **Audio & BGM**.
-2. Switch Sound Source to **My Music** and click **Open Music Folder**.
-3. Place your preferred `.mp3`, `.wav`, `.ogg`, `.flac`, `.m4a`, or `.aac` audio files into the opened folder.
-4. Return to FocusFlow and click **Refresh Library**.
-5. Select a starting track or enable **Shuffle** / **Sequential** playback.
+### 🎵 Adding Personal Music
+1. In FocusFlow, navigate to **Settings** → **Audio & BGM**.
+2. Select **My Music** as your sound source and click **Open Music Folder**.
+3. Drop your favourite music tracks (`.mp3`, `.wav`, `.ogg`, `.flac`, `.m4a`, or `.aac`) into the directory.
+4. Click **Refresh Library** in FocusFlow. Your tracks will be indexed and ready for playback.
 
 ---
 
 ## Data Storage & Privacy
 
-FocusFlow operates with a **strict local-first design**. No session data, task names, timestamps, or usage analytics leave your machine.
+FocusFlow operates under a **zero-telemetry, 100% offline-first principle**. All data is stored in your operating system's local application data folder:
 
-All files are stored in your operating system's standard application data directory:
 * **Windows**: `%APPDATA%\focusflow\`
 * **macOS**: `~/Library/Application Support/focusflow/`
 * **Linux**: `~/.config/focusflow/`
 
-### File Manifest
-
-| File / Folder | Purpose |
+| File / Directory | Purpose |
 | :--- | :--- |
-| `focusflow.db` | Local SQLite database containing logged sessions, durations, tasks, and streak aggregates. |
-| `preferences.json` | User configuration including timer durations, audio choices, volume, and widget preferences. |
-| `recovery.json` | Snapshot of active session states saved for checkpoint recovery. |
-| `themes/` | Directory where user-defined custom `.json` themes reside. |
-| `audio/` | Dedicated folder for user-provided local music files. |
+| `focusflow.db` | Local SQLite database recording session durations, completion rates, and streak logs |
+| `preferences.json` | Stores your custom timer durations, volume, and widget preferences |
+| `recovery.json` | Periodic session checkpoint state used to resume after unexpected exits |
+| `themes/` | Storage location for custom user theme JSON definitions |
+| `audio/` | Dedicated folder for personal audio tracks scanned by the audio player |
 
 ---
 
-## Author
+## Author & Acknowledgements
 
 Created and developed by **Parth Vaidya**.
 
 - GitHub: [@Parth-Vaidya](https://github.com/Parth-Vaidya)
+- Repository: [Focus-Flow-POMODORO-app](https://github.com/Parth-Vaidya/Focus-Flow-POMODORO-app)
+
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).

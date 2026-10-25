@@ -25,7 +25,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const isActive = status === 'running' || status === 'paused';
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-full w-full overflow-hidden bg-background">
       {/* Sidebar */}
       <aside className="w-16 flex flex-col items-center py-6 bg-card border-r border-border gap-2 shrink-0">
         <div className="mb-4">

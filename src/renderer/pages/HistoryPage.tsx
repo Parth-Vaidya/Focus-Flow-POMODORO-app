@@ -114,7 +114,7 @@ export default function HistoryPage() {
   }, [filtered]);
 
   return (
-    <div className="p-8 max-w-2xl">
+    <div className="p-5 sm:p-8 max-w-2xl">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
           <Clock className="w-5 h-5 text-primary" />

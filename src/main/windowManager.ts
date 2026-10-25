@@ -31,11 +31,28 @@ export class WindowManager {
   }
 
   async createMainWindow(): Promise<BrowserWindow> {
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { workArea } = primaryDisplay;
+
+    const targetWidth = 560;
+    const targetHeight = 700;
+
+    // Respect available screen workArea
+    const width = Math.min(targetWidth, workArea.width);
+    const height = Math.min(targetHeight, workArea.height);
+
+    // Keep window centered on open
+    const x = Math.round(workArea.x + (workArea.width - width) / 2);
+    const y = Math.round(workArea.y + (workArea.height - height) / 2);
+
     this.mainWindow = new BrowserWindow({
-      width: 900,
-      height: 650,
-      minWidth: 700,
-      minHeight: 520,
+      width,
+      height,
+      x,
+      y,
+      minWidth: 440,
+      minHeight: 560,
+      center: true,
       show: false,
       backgroundColor: '#0f0f14',
       titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
